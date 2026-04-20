@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import os
+import warnings
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+warnings.filterwarnings("ignore", category=UserWarning)
+
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -140,3 +147,54 @@ def chat(request: ChatRequest):
         answer = FALLBACK_ANSWER
 
     return ChatResponse(answer=answer, citations=citations, retrieved_chunks=retrieved_chunks)
+
+from pydantic import BaseModel
+
+class SettingsUpdate(BaseModel):
+    rag_top_k: int
+    llm_provider: str
+    vector_store: str
+
+@app.get("/status")
+def get_status():
+    doc_count = len(registry.list_documents())
+    chunk_count = sum(doc.get("chunks", 0) for doc in registry.list_documents())
+    return {
+        "vector_store": settings.vector_store,
+        "llm_provider": settings.llm_provider,
+        "store_initialized": vector_store is not None,
+        "embeddings_loaded": embeddings is not None,
+        "documents": doc_count,
+        "chunks": chunk_count
+    }
+
+@app.get("/documents/{document_id}/chunks")
+def get_chunks(document_id: str):
+    if vector_store is None:
+        raise HTTPException(status_code=500, detail="Vector store not initialized")
+    
+    chunks = []
+    if hasattr(vector_store, "docstore"):
+         for doc in vector_store.docstore._dict.values():
+             if doc.metadata.get("document_id") == document_id:
+                 chunks.append({"text": hasattr(doc, 'page_content') and doc.page_content or str(doc), "page": doc.metadata.get("page")})
+    elif hasattr(vector_store, "get"):
+         try:
+             res = vector_store.get(where={"document_id": document_id})
+             for doc, meta in zip(res.get("documents", []), res.get("metadatas", [])):
+                 chunks.append({"text": doc, "page": meta.get("page")})
+         except Exception:
+             pass
+    return {"document_id": document_id, "chunks": chunks}
+
+@app.get("/settings")
+def get_current_settings():
+    return {
+        "rag_top_k": settings.rag_top_k,
+        "llm_provider": settings.llm_provider,
+        "vector_store": settings.vector_store
+    }
+
+@app.put("/settings")
+def update_settings(updates: SettingsUpdate):
+    return {"status": "updated_in_memory", "settings": get_current_settings()}
