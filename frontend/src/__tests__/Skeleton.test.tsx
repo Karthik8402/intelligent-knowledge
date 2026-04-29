@@ -8,11 +8,8 @@ describe('Skeleton UI Component', () => {
     const { container } = render(<Skeleton />);
     const div = container.firstChild as HTMLDivElement;
     
-    // Default is text rectangle
-    expect(div).toHaveClass('animate-shimmer');
-    expect(div).toHaveClass('w-full');
-    expect(div).toHaveClass('h-4');
-    expect(div).toHaveClass('rounded');
+    expect(div).toHaveClass('skeleton');
+    expect(div).toHaveStyle({ width: '100%', height: '20px' });
   });
 
   it('applies circle shape correctly', () => {
