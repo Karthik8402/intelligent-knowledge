@@ -23,7 +23,7 @@ This document describes the end-to-end workflow used by the application.
 
 ## Retrieval and answer pipeline
 
-1. User sends a question from the chat UI.
+1. User sends a question from the chat UI via standard API or SSE streaming endpoint (`/chat/stream`).
 2. Backend retrieves top-k relevant chunks from vector store.
 3. Chunks are formatted as numbered sources.
 4. LLM receives strict instructions:
@@ -31,8 +31,8 @@ This document describes the end-to-end workflow used by the application.
    - Return fallback if answer is missing.
    - Return citation indices as JSON.
 5. Citation indices are validated against retrieved sources.
-6. API returns:
-   - grounded answer
+6. API returns (or streams):
+   - grounded answer (token-by-token if SSE)
    - validated citations
    - retrieved chunks for traceability
 

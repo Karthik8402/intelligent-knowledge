@@ -12,6 +12,8 @@ venv/
 .venv/
 env/
 .env
+.pytest_cache/
+pytest-cache-files-*/
 
 # Vector Stores and Local RAG Data
 data/

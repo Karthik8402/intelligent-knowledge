@@ -45,6 +45,9 @@ This file documents backend environment variables.
 - `METADATA_DB_PATH`
   - Default: `./data/document_registry.json`
 
+- `SQLITE_DB_PATH`
+  - Default: `./data/knowledge_base.db`
+
 ## RAG tuning settings
 
 - `RAG_TOP_K`
@@ -58,3 +61,9 @@ This file documents backend environment variables.
 
 - `MAX_UPLOAD_SIZE_MB`
   - Default: `25`
+
+- `RATE_LIMIT`
+  - Default: `10/minute`
+
+- `CORS_ORIGINS`
+  - Default: `http://localhost:5173,http://127.0.0.1:5173`

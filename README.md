@@ -5,9 +5,10 @@ A production-minded Retrieval-Augmented Generation application built from `SKILL
 ## What This App Does
 
 - Upload and index PDF, TXT, DOCX, and Markdown files.
-- Persist chunk embeddings in ChromaDB.
-- Ask grounded questions over indexed documents.
+- Persist chunk embeddings in ChromaDB and metadata in a local SQLite database.
+- Ask grounded questions over indexed documents with real-time SSE streaming.
 - Return answers with validated citations and retrieved snippets.
+- Production-ready security with CORS and Rate Limiting.
 - Return a safe fallback when information is not in the uploaded context.
 
 Fallback phrase:
