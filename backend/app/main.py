@@ -1,200 +1,153 @@
+"""Intelligent Knowledge Base API — production-grade FastAPI application."""
+
 from __future__ import annotations
 
+import logging
 import os
+import uuid
 import warnings
+from contextlib import asynccontextmanager
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore", category=UserWarning)
 
-from pathlib import Path
-
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-from .citations import validate_citation_indices
 from .config import get_settings
-from .generation import FALLBACK_ANSWER, get_embeddings, answer_with_citations
-from .ingest import ingest_files
-from .models import (
-    ChatRequest,
-    ChatResponse,
-    Citation,
-    DocumentIngestResult,
-    DocumentsListResponse,
-    RetrievedChunk,
+from .dependencies import set_embeddings, set_vector_store
+from .exceptions import KnowledgeBaseError
+from .generation import get_embeddings
+from .retrieval import build_vector_store
+from .routers import chat, documents, system
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(name)s | [%(request_id)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
-from .retrieval import build_vector_store, retrieve_chunks
-from .storage import registry
 
+# Add a default filter so log records without request_id don't crash
+class RequestIdFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "request_id"):
+            record.request_id = "-"  # type: ignore[attr-defined]
+        return True
+
+logging.getLogger().addFilter(RequestIdFilter())
+logger = logging.getLogger("knowledge_base")
+
+# ---------------------------------------------------------------------------
+# Rate Limiter
+# ---------------------------------------------------------------------------
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
+# ---------------------------------------------------------------------------
+# Lifespan: initialize embeddings + vector store once at startup
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting Intelligent Knowledge Base API …")
+    settings = get_settings()
+    try:
+        emb = get_embeddings()
+        vs = build_vector_store(emb)
+        set_embeddings(emb)
+        set_vector_store(vs)
+        logger.info("Vector store (%s) initialized successfully", settings.vector_store)
+    except Exception as e:
+        logger.warning("Vector store disabled: %s", e)
+        set_embeddings(None)
+        set_vector_store(None)
+
+    yield  # app is running
+
+    logger.info("Shutting down …")
+
+
+# ---------------------------------------------------------------------------
+# App factory
+# ---------------------------------------------------------------------------
+app = FastAPI(
+    title="Intelligent Knowledge Base API",
+    description="Production-grade RAG-powered document Q&A system with multi-LLM support.",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+app.state.limiter = limiter
+
+# ── CORS ──
 settings = get_settings()
-try:
-    embeddings = get_embeddings()
-    vector_store = build_vector_store(embeddings)
-except Exception as e:
-    print(f"Warning: Vector store disabled. {e}")
-    embeddings = None
-    vector_store = None
-
-app = FastAPI(title="Intelligent Knowledge Base API", version="1.0.0")
-
+origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins if origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+# ---------------------------------------------------------------------------
+# Middleware: Request ID + structured logging
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next) -> Response:
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
+    request.state.request_id = request_id
+
+    # Thread the request_id into all log records during this request
+    log_extra = {"request_id": request_id}
+    old_factory = logging.getLogRecordFactory()
+
+    def record_factory(*args, **kwargs):
+        record = old_factory(*args, **kwargs)
+        record.request_id = request_id  # type: ignore[attr-defined]
+        return record
+
+    logging.setLogRecordFactory(record_factory)
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+
+    logging.setLogRecordFactory(old_factory)
+    return response
 
 
-@app.post("/documents/upload", response_model=list[DocumentIngestResult])
-def upload_documents(files: list[UploadFile] = File(...)):
-    if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded")
-    if vector_store is None:
-        raise HTTPException(status_code=500, detail="Vector store not initialized. Check API keys.")
-
-    results = ingest_files(files, vector_store)
-    return results
-
-
-@app.get("/documents", response_model=DocumentsListResponse)
-def list_documents():
-    return {"documents": registry.list_documents()}
-
-
-@app.delete("/documents/{document_id}")
-def delete_document(document_id: str):
-    doc = registry.get(document_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    if vector_store is not None and settings.vector_store.lower() == "chroma":
-        vector_store.delete(where={"document_id": document_id})
-        if hasattr(vector_store, "persist"):
-            vector_store.persist()
-
-    removed = registry.delete(document_id)
-
-    upload_path = Path(settings.upload_dir) / doc.get("file_name", "")
-    if upload_path.exists():
-        upload_path.unlink(missing_ok=True)
-
-    return {"status": "deleted", "document": removed}
-
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    if not registry.list_documents() or vector_store is None:
-        return {
-            "answer": FALLBACK_ANSWER if vector_store is not None else "Backend not configured correctly (missing API keys).",
-            "citations": [],
-            "retrieved_chunks": [],
-        }
-
-    retrieved = retrieve_chunks(
-        vector_store=vector_store,
-        question=request.question,
-        top_k=settings.rag_top_k,
-        document_ids=request.document_ids,
+# ---------------------------------------------------------------------------
+# Exception handlers
+# ---------------------------------------------------------------------------
+@app.exception_handler(KnowledgeBaseError)
+async def knowledge_base_exception_handler(request: Request, exc: KnowledgeBaseError):
+    logger.error("KnowledgeBaseError: %s (status=%d)", exc.message, exc.status_code)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.message},
     )
 
-    if not retrieved:
-        return {
-            "answer": FALLBACK_ANSWER,
-            "citations": [],
-            "retrieved_chunks": [],
-        }
 
-    generation = answer_with_citations(request.question, retrieved)
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning("Rate limit exceeded: %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=429,
+        content={"error": "Too many requests. Please slow down.", "retry_after": str(exc.detail)},
+    )
 
-    safe_indices = validate_citation_indices(generation.get("citation_indices", []), len(retrieved))
 
-    citations: list[Citation] = []
-    retrieved_chunks: list[RetrievedChunk] = []
-
-    for idx, (doc, score) in enumerate(retrieved, start=1):
-        meta = doc.metadata or {}
-        page_value = meta.get("page")
-        page_number = int(page_value) + 1 if isinstance(page_value, int) else None
-
-        chunk_payload = RetrievedChunk(
-            document_id=meta.get("document_id", "unknown"),
-            file_name=meta.get("file_name", "unknown"),
-            page=page_number,
-            score=round(float(score), 4) if score is not None else None,
-            text=doc.page_content[:800],
-        )
-        retrieved_chunks.append(chunk_payload)
-
-        if idx in safe_indices:
-            citations.append(
-                Citation(
-                    document_id=chunk_payload.document_id,
-                    file_name=chunk_payload.file_name,
-                    page=chunk_payload.page,
-                    snippet=chunk_payload.text[:220],
-                )
-            )
-
-    answer = generation.get("answer", FALLBACK_ANSWER)
-    if answer != FALLBACK_ANSWER and not citations:
-        answer = FALLBACK_ANSWER
-
-    return ChatResponse(answer=answer, citations=citations, retrieved_chunks=retrieved_chunks)
-
-from pydantic import BaseModel
-
-class SettingsUpdate(BaseModel):
-    rag_top_k: int
-    llm_provider: str
-    vector_store: str
-
-@app.get("/status")
-def get_status():
-    doc_count = len(registry.list_documents())
-    chunk_count = sum(doc.get("chunks", 0) for doc in registry.list_documents())
-    return {
-        "vector_store": settings.vector_store,
-        "llm_provider": settings.llm_provider,
-        "store_initialized": vector_store is not None,
-        "embeddings_loaded": embeddings is not None,
-        "documents": doc_count,
-        "chunks": chunk_count
-    }
-
-@app.get("/documents/{document_id}/chunks")
-def get_chunks(document_id: str):
-    if vector_store is None:
-        raise HTTPException(status_code=500, detail="Vector store not initialized")
-    
-    chunks = []
-    if hasattr(vector_store, "docstore"):
-         for doc in vector_store.docstore._dict.values():
-             if doc.metadata.get("document_id") == document_id:
-                 chunks.append({"text": hasattr(doc, 'page_content') and doc.page_content or str(doc), "page": doc.metadata.get("page")})
-    elif hasattr(vector_store, "get"):
-         try:
-             res = vector_store.get(where={"document_id": document_id})
-             for doc, meta in zip(res.get("documents", []), res.get("metadatas", [])):
-                 chunks.append({"text": doc, "page": meta.get("page")})
-         except Exception:
-             pass
-    return {"document_id": document_id, "chunks": chunks}
-
-@app.get("/settings")
-def get_current_settings():
-    return {
-        "rag_top_k": settings.rag_top_k,
-        "llm_provider": settings.llm_provider,
-        "vector_store": settings.vector_store
-    }
-
-@app.put("/settings")
-def update_settings(updates: SettingsUpdate):
-    return {"status": "updated_in_memory", "settings": get_current_settings()}
+# ---------------------------------------------------------------------------
+# Register routers
+# ---------------------------------------------------------------------------
+app.include_router(documents.router)
+app.include_router(chat.router)
+app.include_router(system.router)

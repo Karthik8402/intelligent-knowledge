@@ -1,17 +1,25 @@
 import hashlib
 import json
+import logging
+import threading
 from datetime import datetime, UTC
 from pathlib import Path
 
 from .config import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 class DocumentRegistry:
+    """Thread-safe JSON-backed document metadata store."""
+
     def __init__(self) -> None:
         settings = get_settings()
         self.path = Path(settings.metadata_db_path)
+        self._lock = threading.Lock()
         if not self.path.exists():
             self.path.write_text(json.dumps({"documents": []}, indent=2), encoding="utf-8")
+            logger.info("Initialized empty document registry at %s", self.path)
 
     def _read(self) -> dict:
         return json.loads(self.path.read_text(encoding="utf-8"))
@@ -20,7 +28,12 @@ class DocumentRegistry:
         self.path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def list_documents(self) -> list[dict]:
-        return self._read().get("documents", [])
+        with self._lock:
+            return self._read().get("documents", [])
+
+    def count(self) -> int:
+        """Return document count without loading full list into caller memory."""
+        return len(self.list_documents())
 
     def find_by_hash(self, content_hash: str) -> dict | None:
         for item in self.list_documents():
@@ -35,27 +48,34 @@ class DocumentRegistry:
         return None
 
     def upsert(self, item: dict) -> None:
-        payload = self._read()
-        docs = payload.get("documents", [])
-        docs = [d for d in docs if d.get("document_id") != item.get("document_id")]
-        docs.append(item)
-        payload["documents"] = docs
-        self._write(payload)
+        with self._lock:
+            payload = self._read()
+            docs = payload.get("documents", [])
+            docs = [d for d in docs if d.get("document_id") != item.get("document_id")]
+            docs.append(item)
+            payload["documents"] = docs
+            self._write(payload)
+            logger.info("Upserted document %s (%s)", item.get("document_id"), item.get("file_name"))
 
     def delete(self, document_id: str) -> dict | None:
-        payload = self._read()
-        docs = payload.get("documents", [])
-        target = None
-        remaining = []
-        for doc in docs:
-            if doc.get("document_id") == document_id:
-                target = doc
-            else:
-                remaining.append(doc)
+        with self._lock:
+            payload = self._read()
+            docs = payload.get("documents", [])
+            target = None
+            remaining = []
+            for doc in docs:
+                if doc.get("document_id") == document_id:
+                    target = doc
+                else:
+                    remaining.append(doc)
 
-        payload["documents"] = remaining
-        self._write(payload)
-        return target
+            payload["documents"] = remaining
+            self._write(payload)
+            if target:
+                logger.info("Deleted document %s", document_id)
+            else:
+                logger.warning("Attempted to delete non-existent document %s", document_id)
+            return target
 
 
 registry = DocumentRegistry()

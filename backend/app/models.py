@@ -56,3 +56,35 @@ class DocumentsListResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     details: dict[str, Any] | None = None
+
+
+# --- Models added during architecture refactor ---
+
+
+class SettingsUpdate(BaseModel):
+    """Request body for PUT /settings."""
+    rag_top_k: int | None = None
+    llm_provider: str | None = None
+    vector_store: str | None = None
+
+
+class SettingsResponse(BaseModel):
+    """Response body for GET /settings and PUT /settings."""
+    rag_top_k: int
+    llm_provider: str
+    vector_store: str
+
+
+class StatusResponse(BaseModel):
+    """Response body for GET /status."""
+    vector_store: str
+    llm_provider: str
+    store_initialized: bool
+    embeddings_loaded: bool
+    documents: int
+    chunks: int
+
+
+class HealthResponse(BaseModel):
+    """Response body for GET /health."""
+    status: str

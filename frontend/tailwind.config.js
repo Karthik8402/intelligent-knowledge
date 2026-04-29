@@ -61,6 +61,69 @@ export default {
         body: ["Inter", "sans-serif"],
         label: ["Inter", "sans-serif"],
       },
+      animation: {
+        "fade-in-up": "fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "fade-in-down": "fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-in-left": "slideInLeft 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "slide-in-right": "slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "scale-in": "scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "shimmer": "shimmer 1.8s ease-in-out infinite",
+        "pulse-glow": "pulseGlow 2s ease-in-out infinite",
+        "float": "float 4s ease-in-out infinite",
+        "gradient-shift": "gradientShift 6s ease infinite",
+        "toast-in": "slideToast 0.4s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "toast-out": "slideToastOut 0.3s ease-in both",
+      },
+      keyframes: {
+        fadeInUp: {
+          from: { opacity: "0", transform: "translateY(24px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        fadeInDown: {
+          from: { opacity: "0", transform: "translateY(-16px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        slideInLeft: {
+          from: { opacity: "0", transform: "translateX(-32px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        slideInRight: {
+          from: { opacity: "0", transform: "translateX(32px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        scaleIn: {
+          from: { opacity: "0", transform: "scale(0.92)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        pulseGlow: {
+          "0%, 100%": { boxShadow: "0 0 6px rgba(181, 196, 255, 0.3)" },
+          "50%": { boxShadow: "0 0 20px rgba(181, 196, 255, 0.7), 0 0 40px rgba(181, 196, 255, 0.2)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-12px)" },
+        },
+        gradientShift: {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" },
+        },
+        slideToast: {
+          from: { opacity: "0", transform: "translateX(100%) scale(0.95)" },
+          to: { opacity: "1", transform: "translateX(0) scale(1)" },
+        },
+        slideToastOut: {
+          from: { opacity: "1", transform: "translateX(0) scale(1)" },
+          to: { opacity: "0", transform: "translateX(100%) scale(0.95)" },
+        },
+      },
+      transitionTimingFunction: {
+        "out-expo": "cubic-bezier(0.16, 1, 0.3, 1)",
+      },
     },
   },
   plugins: [],

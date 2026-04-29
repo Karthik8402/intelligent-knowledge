@@ -91,15 +91,8 @@ def build_context(retrieved_docs: list[tuple[Document, float]]) -> str:
     return "\n\n".join(chunks)
 
 
-def answer_with_citations(question: str, retrieved_docs: list[tuple[Document, float]]) -> dict[str, Any]:
-    if not retrieved_docs:
-        return {"answer": FALLBACK_ANSWER, "citation_indices": []}
-
-    llm = get_chat_model()
-    settings = get_settings()
-    context = build_context(retrieved_docs)
-
-    system_text = (
+def _get_system_prompt() -> str:
+    return (
         "Answer using only the provided context. "
         "If the context does not contain the answer, say exactly: \"The provided documents do not contain this information.\" "
         "Do not use outside knowledge. "
@@ -108,6 +101,10 @@ def answer_with_citations(question: str, retrieved_docs: list[tuple[Document, fl
         '{"answer":"...","citation_indices":[1,2]}'
     )
 
+
+def _build_messages(question: str, context: str) -> list:
+    settings = get_settings()
+    system_text = _get_system_prompt()
     human_text = f"Question: {question}\n\nContext:\n{context}"
 
     llm_provider = settings.llm_provider.lower()
@@ -120,19 +117,13 @@ def answer_with_citations(question: str, retrieved_docs: list[tuple[Document, fl
             f"Instructions:\n{system_text}\n\n"
             f"Question and Context:\n{human_text}"
         )
-        messages = [HumanMessage(content=gemma_prompt)]
+        return [HumanMessage(content=gemma_prompt)]
     else:
-        messages = [SystemMessage(content=system_text), HumanMessage(content=human_text)]
+        return [SystemMessage(content=system_text), HumanMessage(content=human_text)]
 
-    try:
-        response = llm.invoke(messages)
-    except Exception:
-        # Keep API stable for the UI even if a provider rejects prompt format.
-        return {"answer": FALLBACK_ANSWER, "citation_indices": []}
 
-    content = response.content if isinstance(response.content, str) else ""
-
-    # Remove markdown code blocks if present
+def _parse_llm_response(content: str) -> dict[str, Any]:
+    """Parse LLM JSON response, stripping markdown fences if present."""
     content = content.strip()
     if content.startswith("```json"):
         content = content[7:]
@@ -150,5 +141,74 @@ def answer_with_citations(question: str, retrieved_docs: list[tuple[Document, fl
             citation_indices = []
         return {"answer": answer, "citation_indices": citation_indices}
     except json.JSONDecodeError:
-        # Be conservative when model output is not machine-parseable.
         return {"answer": FALLBACK_ANSWER, "citation_indices": []}
+
+
+def answer_with_citations(question: str, retrieved_docs: list[tuple[Document, float]]) -> dict[str, Any]:
+    """Standard (non-streaming) answer generation."""
+    if not retrieved_docs:
+        return {"answer": FALLBACK_ANSWER, "citation_indices": []}
+
+    llm = get_chat_model()
+    context = build_context(retrieved_docs)
+    messages = _build_messages(question, context)
+
+    try:
+        response = llm.invoke(messages)
+    except Exception:
+        return {"answer": FALLBACK_ANSWER, "citation_indices": []}
+
+    content = response.content if isinstance(response.content, str) else ""
+    return _parse_llm_response(content)
+
+
+def stream_answer_with_citations(question: str, retrieved_docs: list[tuple[Document, float]]) -> dict[str, Any]:
+    """
+    Streaming answer generation.
+    Returns dict with:
+      - "tokens": generator yielding string tokens
+      - "citation_indices": list (populated after streaming completes)
+    """
+    if not retrieved_docs:
+        return {"tokens": iter([FALLBACK_ANSWER]), "citation_indices": []}
+
+    llm = get_chat_model()
+    context = build_context(retrieved_docs)
+    messages = _build_messages(question, context)
+
+    # Collect full response for JSON parsing while yielding tokens
+    collected = []
+
+    def token_generator():
+        try:
+            for chunk in llm.stream(messages):
+                token = chunk.content if isinstance(chunk.content, str) else ""
+                if token:
+                    collected.append(token)
+                    yield token
+        except Exception:
+            yield FALLBACK_ANSWER
+
+    tokens = token_generator()
+
+    # We need to consume tokens lazily, then parse at the end
+    # The caller should consume tokens first, then access citation_indices
+    result: dict[str, Any] = {"tokens": tokens, "citation_indices": []}
+
+    class LazyResult(dict):
+        """Dict that parses citations after tokens are consumed."""
+        def __getitem__(self, key):
+            if key == "citation_indices" and collected:
+                full_text = "".join(collected)
+                parsed = _parse_llm_response(full_text)
+                self["citation_indices"] = parsed.get("citation_indices", [])
+            return super().__getitem__(key)
+
+        def get(self, key, default=None):
+            if key == "citation_indices" and collected:
+                full_text = "".join(collected)
+                parsed = _parse_llm_response(full_text)
+                self["citation_indices"] = parsed.get("citation_indices", [])
+            return super().get(key, default)
+
+    return LazyResult(result)

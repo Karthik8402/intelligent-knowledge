@@ -1,6 +1,6 @@
-import type { ChatResponse, ChunksResponse, DocumentMetadata, Settings, SystemStatus, UploadResult } from './types';
+import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult } from './types';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 export async function uploadDocuments(files: File[]): Promise<UploadResult[]> {
   const formData = new FormData();
@@ -15,7 +15,7 @@ export async function uploadDocuments(files: File[]): Promise<UploadResult[]> {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || 'Upload failed');
+    throw new Error(errorData?.detail || errorData?.error || 'Upload failed');
   }
 
   return response.json() as Promise<UploadResult[]>;
@@ -47,10 +47,83 @@ export async function chat(question: string, documentIds?: string[]): Promise<Ch
   });
 
   if (!response.ok) {
+    if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a moment.');
     throw new Error('Failed to send message');
   }
 
   return response.json() as Promise<ChatResponse>;
+}
+
+/**
+ * SSE streaming chat — yields tokens in real-time and returns citations at the end.
+ */
+export async function chatStream(
+  question: string,
+  onToken: (token: string) => void,
+  onCitations: (citations: Citation[]) => void,
+  onDone: () => void,
+  onError: (error: string) => void,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      onError('Rate limit exceeded. Please wait a moment.');
+      return;
+    }
+    onError('Failed to connect to chat stream');
+    return;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    onError('Streaming not supported');
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    let currentEvent = '';
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        currentEvent = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        const data = line.slice(5).trim();
+
+        switch (currentEvent) {
+          case 'token':
+            onToken(data);
+            break;
+          case 'citations':
+            try {
+              const citations = JSON.parse(data) as Citation[];
+              onCitations(citations);
+            } catch { /* ignore parse errors */ }
+            break;
+          case 'done':
+            onDone();
+            break;
+          case 'error':
+            onError(data);
+            break;
+        }
+        currentEvent = '';
+      }
+    }
+  }
 }
 
 export async function getSystemStatus(): Promise<SystemStatus> {
@@ -80,4 +153,10 @@ export async function updateSettings(settings: Settings): Promise<Settings> {
   if (!response.ok) throw new Error('Failed to update settings');
   const result = await response.json();
   return result.settings;
+}
+
+export async function getHealth(): Promise<Record<string, unknown>> {
+  const response = await fetch(`${API_BASE_URL}/health`);
+  if (!response.ok) throw new Error('Failed to get health status');
+  return response.json();
 }

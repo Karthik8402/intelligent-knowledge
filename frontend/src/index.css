@@ -2,13 +2,260 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ================================================================
+   KEYFRAME ANIMATIONS
+   ================================================================ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(181, 196, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(181, 196, 255, 0.7), 0 0 40px rgba(181, 196, 255, 0.2);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes bounceDot {
+  0%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes slideToast {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes slideToastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+}
+
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes borderGlow {
+  0%, 100% {
+    border-color: rgba(181, 196, 255, 0.15);
+  }
+  50% {
+    border-color: rgba(181, 196, 255, 0.4);
+  }
+}
+
+@keyframes progressBar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* ================================================================
+   BASE STYLES
+   ================================================================ */
+
 @layer base {
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
+
+  ::selection {
+    background: rgba(181, 196, 255, 0.3);
+    color: #dfe2eb;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #434654 transparent;
+  }
 }
 
+/* ================================================================
+   ANIMATION UTILITIES
+   ================================================================ */
+
 @layer utilities {
+  /* Fade & slide variants */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fade-in-down {
+    animation: fadeInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-slide-in-left {
+    animation: slideInLeft 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-slide-in-right {
+    animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-scale-in {
+    animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Effects */
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent 25%, rgba(181, 196, 255, 0.05) 50%, transparent 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+  .animate-gradient-shift {
+    background-size: 200% 200%;
+    animation: gradientShift 6s ease infinite;
+  }
+  .animate-border-glow {
+    animation: borderGlow 2.5s ease-in-out infinite;
+  }
+
+  /* Bounce dots for typing indicator */
+  .animate-bounce-dot {
+    animation: bounceDot 1.4s ease-in-out infinite;
+  }
+  .animate-bounce-dot-1 { animation-delay: 0s; }
+  .animate-bounce-dot-2 { animation-delay: 0.16s; }
+  .animate-bounce-dot-3 { animation-delay: 0.32s; }
+
+  /* Toast */
+  .animate-toast-in {
+    animation: slideToast 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-toast-out {
+    animation: slideToastOut 0.3s ease-in both;
+  }
+
+  /* Stagger delays */
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+  .stagger-6 { animation-delay: 0.3s; }
+  .stagger-7 { animation-delay: 0.35s; }
+  .stagger-8 { animation-delay: 0.4s; }
+
+  /* Scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
   }
@@ -19,10 +266,46 @@
     background: #434654;
     border-radius: 10px;
   }
+
+  /* Interactive helpers */
+  .hover-lift {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -5px rgba(181, 196, 255, 0.15);
+  }
+
+  .hover-scale {
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+
+  .focus-glow:focus-within {
+    box-shadow: 0 0 0 2px rgba(181, 196, 255, 0.3), 0 0 20px rgba(181, 196, 255, 0.08);
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    background: linear-gradient(90deg, #1c2026 25%, #262a31 50%, #1c2026 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    border-radius: 8px;
+  }
+}
+
+/* ================================================================
+   BODY — lock to viewport so only <main> scrolls
+   ================================================================ */
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
-  min-height: max(884px, 100dvh);
   background-color: theme('colors.background');
   color: theme('colors.on-surface');
 }
