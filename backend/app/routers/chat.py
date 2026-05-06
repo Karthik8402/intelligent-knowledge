@@ -1,9 +1,10 @@
-"""Chat route: question answering with RAG citations + SSE streaming."""
+"""Chat route: question answering with RAG citations + SSE streaming — secured."""
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -11,19 +12,37 @@ from sse_starlette.sse import EventSourceResponse
 
 from ..citations import validate_citation_indices
 from ..config import get_settings
+from ..core.auth import UserContext, get_current_user
 from ..dependencies import get_registry, get_vector_store_optional
 from ..generation import FALLBACK_ANSWER, answer_with_citations, stream_answer_with_citations
 from ..models import ChatRequest, ChatResponse, Citation, RetrievedChunk
 from ..retrieval import retrieve_chunks
-from ..storage import DocumentRegistry
+from ..storage import LocalDocumentRegistry, SupabaseDocumentRegistry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
+# ── Prompt injection patterns (basic guardrails) ──
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+(a|an)\s+", re.IGNORECASE),
+    re.compile(r"system\s*:\s*", re.IGNORECASE),
+    re.compile(r"<\|?(system|im_start|endoftext)\|?>", re.IGNORECASE),
+    re.compile(r"ADMIN\s*MODE", re.IGNORECASE),
+]
 
-def _build_chat_response(question: str, vector_store: Any, reg: DocumentRegistry) -> ChatResponse:
+
+def _check_prompt_injection(question: str) -> bool:
+    """Return True if the question looks like a prompt injection attempt."""
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(question):
+            return True
+    return False
+
+
+def _build_chat_response(question: str, vector_store: Any, reg, user: UserContext) -> ChatResponse:
     """Core chat logic shared by both standard and streaming endpoints."""
-    if not reg.list_documents() or vector_store is None:
+    if not reg.list_documents(owner_id=user.user_id) or vector_store is None:
         logger.info("Chat fallback: no documents or vector store unavailable")
         return ChatResponse(
             answer=FALLBACK_ANSWER if vector_store is not None else "Backend not configured correctly (missing API keys).",
@@ -86,9 +105,19 @@ def chat(
     request: Request,
     body: ChatRequest,
     vector_store: Any = Depends(get_vector_store_optional),
-    reg: DocumentRegistry = Depends(get_registry),
+    reg=Depends(get_registry),
+    user: UserContext = Depends(get_current_user),
 ):
-    return _build_chat_response(body.question, vector_store, reg)
+    # Prompt injection check
+    if _check_prompt_injection(body.question):
+        logger.warning("Prompt injection attempt blocked from user=%s", user.user_id)
+        return ChatResponse(
+            answer="I can only answer questions about your uploaded documents.",
+            citations=[],
+            retrieved_chunks=[],
+        )
+
+    return _build_chat_response(body.question, vector_store, reg, user)
 
 
 @router.post("/chat/stream")
@@ -96,11 +125,23 @@ async def chat_stream(
     request: Request,
     body: ChatRequest,
     vector_store: Any = Depends(get_vector_store_optional),
-    reg: DocumentRegistry = Depends(get_registry),
+    reg=Depends(get_registry),
+    user: UserContext = Depends(get_current_user),
 ):
     """SSE streaming endpoint — sends tokens as they are generated."""
 
-    if not reg.list_documents() or vector_store is None:
+    # Prompt injection check
+    if _check_prompt_injection(body.question):
+        logger.warning("Prompt injection attempt blocked (stream) from user=%s", user.user_id)
+
+        async def injection_gen():
+            yield {"event": "token", "data": "I can only answer questions about your uploaded documents."}
+            yield {"event": "citations", "data": json.dumps([])}
+            yield {"event": "done", "data": ""}
+
+        return EventSourceResponse(injection_gen())
+
+    if not reg.list_documents(owner_id=user.user_id) or vector_store is None:
         fallback = FALLBACK_ANSWER if vector_store is not None else "Backend not configured correctly (missing API keys)."
 
         async def fallback_gen():

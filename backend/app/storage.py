@@ -1,17 +1,39 @@
+"""Document metadata registry — dual-mode: local JSON or Supabase Postgres."""
+
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
 import threading
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 from .config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentRegistry:
-    """Thread-safe JSON-backed document metadata store."""
+# ---------------------------------------------------------------------------
+# Abstract interface
+# ---------------------------------------------------------------------------
+class DocumentRegistryProtocol(Protocol):
+    """Interface that both local and Supabase registries implement."""
+
+    def list_documents(self, owner_id: str | None = None) -> list[dict]: ...
+    def count(self, owner_id: str | None = None) -> int: ...
+    def find_by_hash(self, content_hash: str, owner_id: str | None = None) -> dict | None: ...
+    def get(self, document_id: str) -> dict | None: ...
+    def upsert(self, item: dict) -> None: ...
+    def delete(self, document_id: str) -> dict | None: ...
+
+
+# ---------------------------------------------------------------------------
+# Local JSON-backed registry (development mode)
+# ---------------------------------------------------------------------------
+class LocalDocumentRegistry:
+    """Thread-safe JSON-backed document metadata store for local development."""
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -27,16 +49,18 @@ class DocumentRegistry:
     def _write(self, payload: dict) -> None:
         self.path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    def list_documents(self) -> list[dict]:
+    def list_documents(self, owner_id: str | None = None) -> list[dict]:
         with self._lock:
-            return self._read().get("documents", [])
+            docs = self._read().get("documents", [])
+            if owner_id:
+                return [d for d in docs if d.get("owner_id") == owner_id]
+            return docs
 
-    def count(self) -> int:
-        """Return document count without loading full list into caller memory."""
-        return len(self.list_documents())
+    def count(self, owner_id: str | None = None) -> int:
+        return len(self.list_documents(owner_id))
 
-    def find_by_hash(self, content_hash: str) -> dict | None:
-        for item in self.list_documents():
+    def find_by_hash(self, content_hash: str, owner_id: str | None = None) -> dict | None:
+        for item in self.list_documents(owner_id):
             if item.get("content_hash") == content_hash:
                 return item
         return None
@@ -78,15 +102,86 @@ class DocumentRegistry:
             return target
 
 
-registry = DocumentRegistry()
+# ---------------------------------------------------------------------------
+# Supabase Postgres-backed registry (production mode)
+# ---------------------------------------------------------------------------
+class SupabaseDocumentRegistry:
+    """Document registry backed by Supabase Postgres for production use."""
+
+    def __init__(self) -> None:
+        from .core.supabase import get_supabase_client
+        self._client = get_supabase_client()
+        self._table = "documents"
+        logger.info("Supabase document registry initialized")
+
+    def list_documents(self, owner_id: str | None = None) -> list[dict]:
+        query = self._client.table(self._table).select("*").order("created_at", desc=True)
+        if owner_id:
+            query = query.eq("owner_id", owner_id)
+        result = query.execute()
+        return result.data or []
+
+    def count(self, owner_id: str | None = None) -> int:
+        return len(self.list_documents(owner_id))
+
+    def find_by_hash(self, content_hash: str, owner_id: str | None = None) -> dict | None:
+        query = self._client.table(self._table).select("*").eq("content_hash", content_hash)
+        if owner_id:
+            query = query.eq("owner_id", owner_id)
+        result = query.limit(1).execute()
+        return result.data[0] if result.data else None
+
+    def get(self, document_id: str) -> dict | None:
+        result = (
+            self._client.table(self._table)
+            .select("*")
+            .eq("document_id", document_id)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    def upsert(self, item: dict) -> None:
+        self._client.table(self._table).upsert(item, on_conflict="document_id").execute()
+        logger.info("Upserted document %s (%s)", item.get("document_id"), item.get("file_name"))
+
+    def delete(self, document_id: str) -> dict | None:
+        target = self.get(document_id)
+        if target:
+            self._client.table(self._table).delete().eq("document_id", document_id).execute()
+            logger.info("Deleted document %s", document_id)
+        else:
+            logger.warning("Attempted to delete non-existent document %s", document_id)
+        return target
 
 
+# ---------------------------------------------------------------------------
+# Factory — picks the right registry based on config
+# ---------------------------------------------------------------------------
+def create_registry() -> LocalDocumentRegistry | SupabaseDocumentRegistry:
+    settings = get_settings()
+    if settings.storage_backend == "supabase":
+        return SupabaseDocumentRegistry()
+    return LocalDocumentRegistry()
+
+
+# Module-level singleton (created on first import)
+registry = create_registry()
+
+
+# ---------------------------------------------------------------------------
+# Utility functions (unchanged)
+# ---------------------------------------------------------------------------
 def content_hash_from_path(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
         while chunk := fh.read(8192):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def content_hash_from_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 def create_document_id(content_hash: str) -> str:

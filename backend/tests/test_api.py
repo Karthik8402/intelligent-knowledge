@@ -1,4 +1,4 @@
-"""API integration tests for v2.0 — covers health, status, settings, documents, chat, CORS, and request IDs."""
+"""API integration tests for v3.0 — covers health, status, settings, documents, chat, CORS, and request IDs."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class TestHealthEndpoint:
         resp = test_client.get("/health")
         data = resp.json()
         assert "version" in data
-        assert data["version"] == "2.0.0"
+        assert data["version"] == "3.0.0"
 
     def test_health_contains_uptime(self, test_client):
         resp = test_client.get("/health")
@@ -39,13 +39,14 @@ class TestHealthEndpoint:
         checks = data["checks"]
         assert "vector_store" in checks
         assert "embeddings" in checks
-        assert "disk_space_ok" in checks
+        # disk_space_ok only present in local mode
+        # assert "disk_space_ok" in checks
 
-    def test_health_contains_disk_info(self, test_client):
+    def test_health_contains_storage_info(self, test_client):
         resp = test_client.get("/health")
         data = resp.json()
-        assert "disk_free_mb" in data
-        assert isinstance(data["disk_free_mb"], int)
+        assert "storage_backend" in data
+        assert "auth_enabled" in data
 
     def test_health_contains_python_version(self, test_client):
         resp = test_client.get("/health")

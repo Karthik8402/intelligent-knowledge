@@ -18,6 +18,9 @@ from langchain_core.documents import Document
 os.environ.setdefault("GOOGLE_API_KEY", "test-key-not-real")
 os.environ.setdefault("METADATA_DB_PATH", "./data/test_registry.json")
 os.environ.setdefault("SQLITE_DB_PATH", "./data/test_knowledge_base.db")
+os.environ.setdefault("STORAGE_BACKEND", "local")
+os.environ.setdefault("VECTOR_STORE", "chroma")
+os.environ.setdefault("AUTH_ENABLED", "false")
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +41,7 @@ def make_document(
             "page": page,
             "source_type": "pdf",
             "chunk_index": 0,
+            "owner_id": "anonymous",
             "created_at": "2026-01-01T00:00:00+00:00",
         },
     )
@@ -48,7 +52,7 @@ def make_document(
 # ---------------------------------------------------------------------------
 @pytest.fixture()
 def tmp_registry(tmp_path: Path):
-    """Create a DocumentRegistry backed by a temporary JSON file."""
+    """Create a LocalDocumentRegistry backed by a temporary JSON file."""
     from app.config import get_settings
 
     # Clear the lru_cache so we can inject a temp path
@@ -59,10 +63,12 @@ def tmp_registry(tmp_path: Path):
     os.environ["UPLOAD_DIR"] = str(tmp_path / "uploads")
     os.environ["CHROMA_PERSIST_DIR"] = str(tmp_path / "chroma")
     os.environ["SQLITE_DB_PATH"] = str(tmp_path / "knowledge_base.db")
+    os.environ["STORAGE_BACKEND"] = "local"
+    os.environ["AUTH_ENABLED"] = "false"
 
-    from app.storage import DocumentRegistry
+    from app.storage import LocalDocumentRegistry
 
-    reg = DocumentRegistry()
+    reg = LocalDocumentRegistry()
     yield reg
 
     # Cleanup
@@ -126,5 +132,6 @@ def sample_doc_record() -> dict:
         "pages": 5,
         "chunks": 12,
         "content_hash": "abc123def456ghij789klmno",
+        "owner_id": "anonymous",
         "created_at": "2026-01-01T00:00:00+00:00",
     }

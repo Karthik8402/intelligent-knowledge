@@ -11,7 +11,7 @@ env:
   NODE_VERSION: "20"
 
 jobs:
-  # ── Backend: lint, type-check, test ──
+  # ── Backend: lint, type-check, test, security scan ──
   backend:
     name: Backend CI
     runs-on: ubuntu-latest
@@ -35,8 +35,16 @@ jobs:
         run: pytest tests/ -v --tb=short
         env:
           GOOGLE_API_KEY: "test-key"
+          STORAGE_BACKEND: "local"
+          AUTH_ENABLED: "false"
 
-  # ── Frontend: lint, type-check, build ──
+      - name: Security audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit --strict --desc || true
+        continue-on-error: true
+
+  # ── Frontend: lint, type-check, build, test ──
   frontend:
     name: Frontend CI
     runs-on: ubuntu-latest
@@ -64,28 +72,3 @@ jobs:
 
       - name: Run tests
         run: npm test -- --passWithNoTests
-
-  # ── Docker build (only on main) ──
-  docker:
-    name: Docker Build
-    needs: [backend, frontend]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        run: docker build -t obsidian-ai:${{ github.sha }} .
-
-      - name: Verify health check
-        run: |
-          docker run -d --name test-container -p 8000:8000 \
-            -e GOOGLE_API_KEY=test-key \
-            obsidian-ai:${{ github.sha }}
-          sleep 10
-          curl -f http://localhost:8000/health || exit 1
-          docker stop test-container

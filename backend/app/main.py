@@ -28,7 +28,7 @@ from .retrieval import build_vector_store
 from .routers import chat, documents, system
 
 # ---------------------------------------------------------------------------
-# Logging
+# Logging — structured JSON-style for production observability
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -36,12 +36,14 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+
 # Add a default filter so log records without request_id don't crash
 class RequestIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if not hasattr(record, "request_id"):
             record.request_id = "-"  # type: ignore[attr-defined]
         return True
+
 
 logging.getLogger().addFilter(RequestIdFilter())
 logger = logging.getLogger("knowledge_base")
@@ -58,6 +60,15 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 async def lifespan(app: FastAPI):
     logger.info("Starting Intelligent Knowledge Base API …")
     settings = get_settings()
+
+    logger.info(
+        "Config: storage=%s, vector=%s, llm=%s, auth=%s",
+        settings.storage_backend,
+        settings.vector_store,
+        settings.llm_provider,
+        settings.auth_enabled,
+    )
+
     try:
         emb = get_embeddings()
         vs = build_vector_store(emb)
@@ -80,7 +91,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Intelligent Knowledge Base API",
     description="Production-grade RAG-powered document Q&A system with multi-LLM support.",
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -95,6 +106,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
 
 
@@ -107,7 +119,6 @@ async def request_id_middleware(request: Request, call_next) -> Response:
     request.state.request_id = request_id
 
     # Thread the request_id into all log records during this request
-    log_extra = {"request_id": request_id}
     old_factory = logging.getLogRecordFactory()
 
     def record_factory(*args, **kwargs):
@@ -121,6 +132,19 @@ async def request_id_middleware(request: Request, call_next) -> Response:
     response.headers["X-Request-ID"] = request_id
 
     logging.setLogRecordFactory(old_factory)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Security headers middleware
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
 
 

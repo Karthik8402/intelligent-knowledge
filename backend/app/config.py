@@ -18,13 +18,25 @@ class Settings(BaseSettings):
     embedding_model: str = "gemini-embedding-001"
 
     # ── Vector Store ──
-    vector_store: str = "chroma"
+    vector_store: str = "chroma"            # "chroma" | "pgvector"
     chroma_persist_dir: str = "./data/chroma"
 
-    # ── Storage ──
+    # ── Storage Backend ──
+    storage_backend: str = "local"          # "local" | "supabase"
     upload_dir: str = "./data/uploads"
     metadata_db_path: str = "./data/document_registry.json"
     sqlite_db_path: str = "./data/knowledge_base.db"
+
+    # ── Supabase ──
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_key: str = ""
+    supabase_jwt_secret: str = ""
+    database_url: str = ""                  # postgres://... connection string
+    supabase_storage_bucket: str = "documents"
+
+    # ── Auth ──
+    auth_enabled: bool = False              # Set True in production
 
     # ── RAG ──
     rag_top_k: int = 5
@@ -43,9 +55,11 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     settings = Settings()
 
-    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
-    Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
-    Path(settings.metadata_db_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(settings.sqlite_db_path).parent.mkdir(parents=True, exist_ok=True)
+    # Only create local dirs when using local storage
+    if settings.storage_backend == "local":
+        Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+        Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
+        Path(settings.metadata_db_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(settings.sqlite_db_path).parent.mkdir(parents=True, exist_ok=True)
 
     return settings

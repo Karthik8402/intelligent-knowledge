@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from .core.auth import UserContext, get_current_user, get_optional_user  # noqa: F401 — re-exported
 from .exceptions import VectorStoreNotInitializedError
-from .storage import DocumentRegistry, registry
+from .storage import registry
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,6 @@ def get_embeddings_instance() -> Any | None:
     return _embeddings
 
 
-def get_registry() -> DocumentRegistry:
-    """Dependency that provides the document registry."""
+def get_registry():
+    """Dependency that provides the document registry (local or Supabase)."""
     return registry

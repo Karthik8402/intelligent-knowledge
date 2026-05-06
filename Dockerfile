@@ -1,13 +1,9 @@
-# ── Stage 1: Build frontend ──
-FROM node:20-alpine AS frontend-build
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci --production=false
-COPY frontend/ ./
-RUN npm run build
-
-# ── Stage 2: Backend runtime ──
+# ── Production Dockerfile for Render deployment ──
+# Backend only — frontend is deployed separately on Vercel
 FROM python:3.12-slim AS runtime
+
+# Security: run as non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
 
 # System deps
 RUN apt-get update && \
@@ -16,7 +12,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Python deps
+# Python deps (cached layer)
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -24,16 +20,24 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY backend/.env.example ./.env.example
 
-# Copy built frontend → serve as static
-COPY --from=frontend-build /app/frontend/dist ./static
+# Create data directories for local mode
+RUN mkdir -p data/uploads data/chroma && \
+    chown -R appuser:appuser /app
 
-# Create data directories
-RUN mkdir -p data/uploads data/chroma
+# Switch to non-root user
+USER appuser
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--log-level", "info"]
+# Production server with gunicorn + uvicorn workers
+CMD ["gunicorn", "app.main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "2", \
+     "--timeout", "120", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]

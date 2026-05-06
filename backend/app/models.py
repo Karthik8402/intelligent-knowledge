@@ -1,27 +1,35 @@
+"""Pydantic models with strict validation for API contracts."""
+
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Citation(BaseModel):
-    document_id: str
-    file_name: str
+    document_id: str = Field(max_length=64)
+    file_name: str = Field(max_length=255)
     page: int | None = None
-    snippet: str
+    snippet: str = Field(max_length=500)
 
 
 class RetrievedChunk(BaseModel):
-    document_id: str
-    file_name: str
+    document_id: str = Field(max_length=64)
+    file_name: str = Field(max_length=255)
     page: int | None = None
     score: float | None = None
-    text: str
+    text: str = Field(max_length=2000)
 
 
 class ChatRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=2000)
     document_ids: list[str] | None = None
+
+    @field_validator("question")
+    @classmethod
+    def sanitize_question(cls, v: str) -> str:
+        """Strip leading/trailing whitespace and null bytes."""
+        return v.strip().replace("\x00", "")
 
 
 class ChatResponse(BaseModel):
@@ -32,20 +40,20 @@ class ChatResponse(BaseModel):
 
 class DocumentIngestResult(BaseModel):
     document_id: str
-    file_name: str
+    file_name: str = Field(max_length=255)
     pages: int
     chunks: int
-    status: str
+    status: str = Field(max_length=20)
     error: str | None = None
 
 
 class DocumentMetadata(BaseModel):
-    document_id: str
-    file_name: str
-    source_type: str
+    document_id: str = Field(max_length=64)
+    file_name: str = Field(max_length=255)
+    source_type: str = Field(max_length=10)
     pages: int
     chunks: int
-    content_hash: str
+    content_hash: str = Field(max_length=128)
     created_at: datetime
 
 
@@ -58,14 +66,14 @@ class ErrorResponse(BaseModel):
     details: dict[str, Any] | None = None
 
 
-# --- Models added during architecture refactor ---
+# --- System models ---
 
 
 class SettingsUpdate(BaseModel):
     """Request body for PUT /settings."""
-    rag_top_k: int | None = None
-    llm_provider: str | None = None
-    vector_store: str | None = None
+    rag_top_k: int | None = Field(None, ge=1, le=20)
+    llm_provider: str | None = Field(None, max_length=20)
+    vector_store: str | None = Field(None, max_length=20)
 
 
 class SettingsResponse(BaseModel):

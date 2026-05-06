@@ -1,6 +1,40 @@
+import { getAccessToken } from './lib/supabase';
 import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
+/**
+ * Get authorization headers with the current JWT token.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAccessToken();
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
+/**
+ * Wrapper for fetch that automatically includes auth headers.
+ */
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...options.headers,
+    ...(await authHeaders()),
+  };
+
+  const response = await fetch(url, { ...options, headers });
+
+  // Handle auth failures globally
+  if (response.status === 401) {
+    // Token expired — redirect to login
+    window.location.href = '/login';
+    throw new Error('Authentication expired. Please log in again.');
+  }
+
+  return response;
+}
+
 
 export async function uploadDocuments(files: File[]): Promise<UploadResult[]> {
   const formData = new FormData();
@@ -8,7 +42,7 @@ export async function uploadDocuments(files: File[]): Promise<UploadResult[]> {
     formData.append('files', file);
   });
 
-  const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+  const response = await authFetch(`${API_BASE_URL}/documents/upload`, {
     method: 'POST',
     body: formData,
   });
@@ -22,7 +56,7 @@ export async function uploadDocuments(files: File[]): Promise<UploadResult[]> {
 }
 
 export async function listDocuments(): Promise<DocumentMetadata[]> {
-  const response = await fetch(`${API_BASE_URL}/documents`);
+  const response = await authFetch(`${API_BASE_URL}/documents`);
   if (!response.ok) {
     throw new Error('Failed to list documents');
   }
@@ -31,7 +65,7 @@ export async function listDocuments(): Promise<DocumentMetadata[]> {
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/documents/${documentId}`, {
+  const response = await authFetch(`${API_BASE_URL}/documents/${documentId}`, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -40,7 +74,7 @@ export async function deleteDocument(documentId: string): Promise<void> {
 }
 
 export async function chat(question: string, documentIds?: string[]): Promise<ChatResponse> {
-  const response = await fetch(`${API_BASE_URL}/chat`, {
+  const response = await authFetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, document_ids: documentIds?.length ? documentIds : null }),
@@ -64,13 +98,21 @@ export async function chatStream(
   onDone: () => void,
   onError: (error: string) => void,
 ): Promise<void> {
+  const token = await getAccessToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ question }),
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
     if (response.status === 429) {
       onError('Rate limit exceeded. Please wait a moment.');
       return;
@@ -127,25 +169,25 @@ export async function chatStream(
 }
 
 export async function getSystemStatus(): Promise<SystemStatus> {
-  const response = await fetch(`${API_BASE_URL}/status`);
+  const response = await authFetch(`${API_BASE_URL}/status`);
   if (!response.ok) throw new Error('Failed to get status');
   return response.json();
 }
 
 export async function getDocumentChunks(documentId: string): Promise<ChunksResponse> {
-  const response = await fetch(`${API_BASE_URL}/documents/${documentId}/chunks`);
+  const response = await authFetch(`${API_BASE_URL}/documents/${documentId}/chunks`);
   if (!response.ok) throw new Error('Failed to get chunks');
   return response.json();
 }
 
 export async function getSettings(): Promise<Settings> {
-  const response = await fetch(`${API_BASE_URL}/settings`);
+  const response = await authFetch(`${API_BASE_URL}/settings`);
   if (!response.ok) throw new Error('Failed to get settings');
   return response.json();
 }
 
 export async function updateSettings(settings: Settings): Promise<Settings> {
-  const response = await fetch(`${API_BASE_URL}/settings`, {
+  const response = await authFetch(`${API_BASE_URL}/settings`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
@@ -156,6 +198,7 @@ export async function updateSettings(settings: Settings): Promise<Settings> {
 }
 
 export async function getHealth(): Promise<Record<string, unknown>> {
+  // Health endpoint is public — no auth needed
   const response = await fetch(`${API_BASE_URL}/health`);
   if (!response.ok) throw new Error('Failed to get health status');
   return response.json();

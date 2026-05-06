@@ -84,21 +84,32 @@ class TestLoadDocuments:
         assert len(docs) >= 1
 
 
-class TestSaveUpload:
-    """Tests for the file save helper."""
+class TestValidateFileType:
+    """Tests for file type validation with magic bytes."""
 
-    def test_saves_file_correctly(self, tmp_path):
-        from app.ingest import _save_upload
+    def test_validates_txt_extension(self):
+        from app.ingest import _validate_file_type
 
-        content = b"file content bytes"
-        mock_upload = MagicMock(spec=UploadFile)
-        mock_upload.file = BytesIO(content)
+        ext = _validate_file_type("doc.txt", b"Hello world")
+        assert ext == ".txt"
 
-        dest = tmp_path / "subdir" / "uploaded.txt"
-        _save_upload(mock_upload, dest)
+    def test_rejects_unsupported_extension(self):
+        from app.ingest import _validate_file_type
 
-        assert dest.exists()
-        assert dest.read_bytes() == content
+        with pytest.raises(ValueError, match="Unsupported file type"):
+            _validate_file_type("data.xlsx", b"some data")
+
+    def test_validates_pdf_magic_bytes(self):
+        from app.ingest import _validate_file_type
+
+        ext = _validate_file_type("doc.pdf", b"%PDF-1.4 some content")
+        assert ext == ".pdf"
+
+    def test_rejects_fake_pdf(self):
+        from app.ingest import _validate_file_type
+
+        with pytest.raises(ValueError, match="file type spoofing"):
+            _validate_file_type("doc.pdf", b"This is not a PDF")
 
 
 class TestIngestFiles:
@@ -119,6 +130,7 @@ class TestIngestFiles:
 
         mock_upload = MagicMock(spec=UploadFile)
         mock_upload.filename = "data.xlsx"
+        mock_upload.file = BytesIO(b"fake data")
 
         results = ingest_files([mock_upload], mock_vector_store)
         assert results[0]["status"] == "failed"
