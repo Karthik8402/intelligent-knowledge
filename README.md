@@ -348,6 +348,7 @@ npm run test:ci     # with coverage report
 
 - `VECTOR_STORE=chroma` is the default for local development.
 - `VECTOR_STORE=pgvector` and `STORAGE_BACKEND=supabase` are recommended for production.
+- Duplicate uploads are rejected using a file content hash (`sha256`).
 - The LangGraph pipeline is executed synchronously per request; it can be upgraded to an async `StateGraph` for parallel branches.
 - Settings updates via `PUT /settings` are applied in memory and do **not** persist to `.env`.
 
