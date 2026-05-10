@@ -59,6 +59,13 @@ export type ChunksResponse = {
 
 export type Settings = {
   rag_top_k: number;
+  rag_chunk_size: number;
+  rag_chunk_overlap: number;
   llm_provider: string;
+  llm_model: string;
+  llm_temperature: number;
+  llm_top_p: number;
+  embedding_model: string;
   vector_store: string;
+  max_upload_size_mb: number;
 };

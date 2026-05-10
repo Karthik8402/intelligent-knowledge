@@ -1,6 +1,5 @@
 """Comprehensive tests for app.citations.validate_citation_indices."""
 
-import pytest
 from app.citations import validate_citation_indices
 
 

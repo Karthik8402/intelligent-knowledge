@@ -10,19 +10,23 @@ class Settings(BaseSettings):
     # ── LLM / Embedding ──
     llm_provider: str = "google"
     llm_model: str = "gemma-3-27b-it"
+    llm_temperature: float = 0.2
+    llm_top_p: float = 1.0
+    llm_max_tokens: int | None = None
     google_api_key: str = ""
     openai_api_key: str = ""
+    nvidia_api_key: str = ""
     groq_api_key: str = ""
 
     embedding_provider: str = "google"
     embedding_model: str = "gemini-embedding-001"
 
     # ── Vector Store ──
-    vector_store: str = "chroma"            # "chroma" | "pgvector"
+    vector_store: str = "chroma"  # "chroma" | "pgvector"
     chroma_persist_dir: str = "./data/chroma"
 
     # ── Storage Backend ──
-    storage_backend: str = "local"          # "local" | "supabase"
+    storage_backend: str = "local"  # "local" | "supabase"
     upload_dir: str = "./data/uploads"
     metadata_db_path: str = "./data/document_registry.json"
     sqlite_db_path: str = "./data/knowledge_base.db"
@@ -32,11 +36,11 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_key: str = ""
     supabase_jwt_secret: str = ""
-    database_url: str = ""                  # postgres://... connection string
+    database_url: str = ""  # postgres://... connection string
     supabase_storage_bucket: str = "documents"
 
     # ── Auth ──
-    auth_enabled: bool = False              # Set True in production
+    auth_enabled: bool = False  # Set True in production
 
     # ── RAG ──
     rag_top_k: int = 5

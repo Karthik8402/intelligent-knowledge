@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import hashlib
 import json
 import logging
-import threading
-from datetime import UTC, datetime
 from pathlib import Path
+import threading
 from typing import Protocol
 
 from .config import get_settings
@@ -110,6 +110,7 @@ class SupabaseDocumentRegistry:
 
     def __init__(self) -> None:
         from .core.supabase import get_supabase_client
+
         self._client = get_supabase_client()
         self._table = "documents"
         logger.info("Supabase document registry initialized")

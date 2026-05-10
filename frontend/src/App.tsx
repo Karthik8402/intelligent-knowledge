@@ -1,39 +1,35 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import Layout from './components/Layout';
-import { useAuth } from './hooks/useAuth';
-import ChatPage from './pages/ChatPage';
-import ChunksPage from './pages/ChunksPage';
-import DocumentsPage from './pages/DocumentsPage';
-import LoginPage from './pages/LoginPage';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import Layout from './core/Layout';
+import { AuthProvider, useAuth } from './hooks/useAuth';
+import ChatPage from './features/chat/ChatPage';
+import ChunksPage from './features/documents/ChunksPage';
+import DocumentsPage from './features/documents/DocumentsPage';
 import SettingsPage from './pages/SettingsPage';
 import StatusPage from './pages/StatusPage';
 
+// New Pages
+import HomePage from './pages/Home';
+import LoginPage from './features/auth/Login';
+import RegisterPage from './features/auth/Register';
+import ForgotPasswordPage from './features/auth/ForgotPassword';
+import ResetPasswordPage from './features/auth/ResetPassword';
+import { LoadingSpinner } from './components/ui/LoadingSpinner';
+
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === 'true';
 
-function ProtectedRoutes() {
-  const { user, loading } = useAuth();
+function DashboardRoutes() {
+  const { loading } = useAuth();
 
   if (AUTH_ENABLED && loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        color: '#888',
-      }}>
-        Loading…
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
-  if (AUTH_ENABLED && !user) {
-    return <Navigate to="/login" replace />;
-  }
+  // Removed the navigation guard to allow guest access to documents and chat.
 
   return (
     <Routes>
-      <Route path="/" element={<Layout />}>
+      <Route element={<Layout />}>
         <Route index element={<Navigate to="/documents" replace />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="documents" element={<DocumentsPage />} />
@@ -45,14 +41,39 @@ function ProtectedRoutes() {
   );
 }
 
+function ProtectedRoute() {
+  const { user, loading } = useAuth();
+
+  if (!AUTH_ENABLED) {
+    return <Outlet />;
+  }
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  return user ? <Outlet /> : <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/*" element={<ProtectedRoutes />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <Toaster position="top-center" toastOptions={{ 
+        style: { background: '#18181b', color: '#f4f4f5', border: '1px solid #27272a' }
+      }} />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/*" element={<DashboardRoutes />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

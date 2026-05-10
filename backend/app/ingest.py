@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +12,9 @@ from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, Te
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from . import storage
 from .config import get_settings
-from .storage import content_hash_from_bytes, content_hash_from_path, create_document_id, registry
+from .storage import content_hash_from_bytes, create_document_id
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def _validate_file_type(file_name: str, file_bytes: bytes) -> str:
 
     # Magic byte validation for binary formats
     expected_magic = MAGIC_BYTES.get(extension)
-    if expected_magic and not file_bytes[:len(expected_magic)].startswith(expected_magic):
+    if expected_magic and not file_bytes[: len(expected_magic)].startswith(expected_magic):
         raise ValueError(
             f"File content does not match expected format for {extension}. "
             "Possible file type spoofing detected."
@@ -123,16 +124,18 @@ def ingest_files(
 
             # Compute content hash for duplicate detection
             file_hash = content_hash_from_bytes(file_bytes)
-            existing = registry.find_by_hash(file_hash, owner_id=owner_id)
+            existing = storage.registry.find_by_hash(file_hash, owner_id=owner_id)
             if existing:
-                results.append({
-                    "document_id": existing["document_id"],
-                    "file_name": existing["file_name"],
-                    "pages": existing.get("pages", 0),
-                    "chunks": existing.get("chunks", 0),
-                    "status": "duplicate",
-                    "error": None,
-                })
+                results.append(
+                    {
+                        "document_id": existing["document_id"],
+                        "file_name": existing["file_name"],
+                        "pages": existing.get("pages", 0),
+                        "chunks": existing.get("chunks", 0),
+                        "status": "duplicate",
+                        "error": None,
+                    }
+                )
                 continue
 
             document_id = create_document_id(file_hash)
@@ -189,25 +192,29 @@ def ingest_files(
                 "owner_id": owner_id,
                 "created_at": datetime.now(UTC).isoformat(),
             }
-            registry.upsert(record)
+            storage.registry.upsert(record)
 
-            results.append({
-                "document_id": document_id,
-                "file_name": upload.filename,
-                "pages": len(base_docs),
-                "chunks": len(chunks),
-                "status": "indexed",
-                "error": None,
-            })
+            results.append(
+                {
+                    "document_id": document_id,
+                    "file_name": upload.filename,
+                    "pages": len(base_docs),
+                    "chunks": len(chunks),
+                    "status": "indexed",
+                    "error": None,
+                }
+            )
         except Exception as exc:
             logger.exception("Failed to ingest file: %s", upload.filename)
-            results.append({
-                "document_id": "",
-                "file_name": upload.filename or "unknown",
-                "pages": 0,
-                "chunks": 0,
-                "status": "failed",
-                "error": str(exc),
-            })
+            results.append(
+                {
+                    "document_id": "",
+                    "file_name": upload.filename or "unknown",
+                    "pages": 0,
+                    "chunks": 0,
+                    "status": "failed",
+                    "error": str(exc),
+                }
+            )
 
     return results

@@ -15,6 +15,11 @@ env/
 .pytest_cache/
 pytest-cache-files-*/
 
+# Coverage reports
+.coverage
+htmlcov/
+coverage/
+
 # Vector Stores and Local RAG Data
 data/
 backend/data/

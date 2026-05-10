@@ -1,0 +1,40 @@
+# Ruff configuration for Intelligent Knowledge Base backend
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "B008",  # do not perform function calls in default arguments (FastAPI pattern)
+    "N806",  # variable in function should be lowercase (common in ML code)
+    "UP007", # use X | Y for union type annotations (Python 3.10+)
+]
+
+# Exclude common non-source directories
+exclude = [
+    ".venv",
+    "venv",
+    "__pycache__",
+    "data",
+    "migrations",
+    ".pytest_cache",
+]
+
+[lint.isort]
+known-first-party = ["app"]
+force-sort-within-sections = true
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

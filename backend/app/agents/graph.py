@@ -11,9 +11,8 @@ without calling the LLM — saving API costs.
 
 from __future__ import annotations
 
-import json
-import logging
 from dataclasses import dataclass, field
+import logging
 from typing import Any
 
 from langchain_core.documents import Document
@@ -23,9 +22,6 @@ from ..config import get_settings
 from ..generation import (
     FALLBACK_ANSWER,
     answer_with_citations,
-    build_context,
-    get_chat_model,
-    stream_answer_with_citations,
 )
 from ..retrieval import retrieve_chunks
 
@@ -38,6 +34,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RAGState:
     """Mutable state passed through the LangGraph pipeline."""
+
     question: str = ""
     retrieved_docs: list[tuple[Document, float]] = field(default_factory=list)
     relevant_docs: list[tuple[Document, float]] = field(default_factory=list)
@@ -92,7 +89,11 @@ def grade_node(state: RAGState) -> RAGState:
         logger.info("Grade node: no chunks above relevance threshold %.2f", RELEVANCE_THRESHOLD)
         state.fallback = True
     else:
-        logger.info("Grade node: %d/%d chunks passed relevance filter", len(relevant), len(state.retrieved_docs))
+        logger.info(
+            "Grade node: %d/%d chunks passed relevance filter",
+            len(relevant),
+            len(state.retrieved_docs),
+        )
         state.relevant_docs = relevant
 
     return state
@@ -121,7 +122,11 @@ def generate_node(state: RAGState) -> RAGState:
     if state.answer != FALLBACK_ANSWER and not state.citation_indices:
         state.answer = FALLBACK_ANSWER
 
-    logger.info("Generate node: answer length=%d, citations=%d", len(state.answer), len(state.citation_indices))
+    logger.info(
+        "Generate node: answer length=%d, citations=%d",
+        len(state.answer),
+        len(state.citation_indices),
+    )
     return state
 
 

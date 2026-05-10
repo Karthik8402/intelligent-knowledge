@@ -5,18 +5,30 @@ This file documents backend environment variables.
 ## Core provider settings
 
 - `LLM_PROVIDER`
-  - Allowed: `google`, `openai`, `groq`
+  - Allowed: `google`, `openai`, `nvidia`, `groq`
   - Default: `google`
 
 - `LLM_MODEL`
-  - Default: `gemma-3-27b-it`
-  - Example alternatives: `gpt-4o-mini`, `llama-3.3-70b-versatile`
+  - Default: `gemini-2.5-flash-light`
+  - Example alternatives: `gpt-4o-mini`, `minimaxai/minimax-m2.7`, `llama-3.3-70b-versatile`
+
+- `LLM_TEMPERATURE`
+  - Default: `0.2`
+
+- `LLM_TOP_P`
+  - Default: `1.0`
+
+- `LLM_MAX_TOKENS`
+  - Optional maximum output tokens (used by NVIDIA)
 
 - `GOOGLE_API_KEY`
   - Required when `LLM_PROVIDER=google` or `EMBEDDING_PROVIDER=google`
 
 - `OPENAI_API_KEY`
   - Required when `LLM_PROVIDER=openai` or `EMBEDDING_PROVIDER=openai`
+
+- `NVIDIA_API_KEY`
+  - Required when `LLM_PROVIDER=nvidia`
 
 - `GROQ_API_KEY`
   - Required when `LLM_PROVIDER=groq`

@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
-
-import pytest
-
 
 class TestDocumentRegistry:
     """Tests for the JSON-backed document registry."""
@@ -69,15 +63,17 @@ class TestDocumentRegistry:
 
     def test_multiple_documents(self, tmp_registry):
         for i in range(5):
-            tmp_registry.upsert({
-                "document_id": f"doc-{i}",
-                "file_name": f"file_{i}.pdf",
-                "source_type": "pdf",
-                "pages": i,
-                "chunks": i * 2,
-                "content_hash": f"hash-{i}",
-                "created_at": "2026-01-01T00:00:00+00:00",
-            })
+            tmp_registry.upsert(
+                {
+                    "document_id": f"doc-{i}",
+                    "file_name": f"file_{i}.pdf",
+                    "source_type": "pdf",
+                    "pages": i,
+                    "chunks": i * 2,
+                    "content_hash": f"hash-{i}",
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                }
+            )
         assert tmp_registry.count() == 5
         tmp_registry.delete("doc-2")
         assert tmp_registry.count() == 4

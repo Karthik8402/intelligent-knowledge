@@ -71,20 +71,37 @@ class ErrorResponse(BaseModel):
 
 class SettingsUpdate(BaseModel):
     """Request body for PUT /settings."""
+
     rag_top_k: int | None = Field(None, ge=1, le=20)
+    rag_chunk_size: int | None = Field(None, ge=100, le=4000)
+    rag_chunk_overlap: int | None = Field(None, ge=0, le=1000)
     llm_provider: str | None = Field(None, max_length=20)
+    llm_model: str | None = Field(None, max_length=80)
+    llm_temperature: float | None = Field(None, ge=0.0, le=1.0)
+    llm_top_p: float | None = Field(None, ge=0.0, le=1.0)
+    embedding_model: str | None = Field(None, max_length=80)
     vector_store: str | None = Field(None, max_length=20)
+    max_upload_size_mb: int | None = Field(None, ge=1, le=200)
 
 
 class SettingsResponse(BaseModel):
     """Response body for GET /settings and PUT /settings."""
+
     rag_top_k: int
+    rag_chunk_size: int
+    rag_chunk_overlap: int
     llm_provider: str
+    llm_model: str
+    llm_temperature: float
+    llm_top_p: float
+    embedding_model: str
     vector_store: str
+    max_upload_size_mb: int
 
 
 class StatusResponse(BaseModel):
     """Response body for GET /status."""
+
     vector_store: str
     llm_provider: str
     store_initialized: bool
@@ -95,4 +112,5 @@ class StatusResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Response body for GET /health."""
+
     status: str

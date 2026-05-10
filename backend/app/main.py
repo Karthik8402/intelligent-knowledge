@@ -2,30 +2,31 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import logging
 import os
 import uuid
 import warnings
-from contextlib import asynccontextmanager
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 warnings.filterwarnings("ignore", category=UserWarning)
 
-from fastapi import FastAPI, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from fastapi import FastAPI, Request, Response  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi import Limiter  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
+from slowapi.util import get_remote_address  # noqa: E402
 
-from .config import get_settings
-from .dependencies import set_embeddings, set_vector_store
-from .exceptions import KnowledgeBaseError
-from .generation import get_embeddings
-from .retrieval import build_vector_store
-from .routers import chat, documents, system
+from .api.v1.api import api_router  # noqa: E402
+from .config import get_settings  # noqa: E402
+from .dependencies import set_embeddings, set_vector_store  # noqa: E402
+from .exceptions import KnowledgeBaseError  # noqa: E402
+from .generation import get_embeddings  # noqa: E402
+from .retrieval import build_vector_store  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Logging — structured JSON-style for production observability
@@ -37,21 +38,28 @@ logging.basicConfig(
 )
 
 
-# Add a default filter so log records without request_id don't crash
+import contextvars  # noqa: E402
+
+request_id_context_var = contextvars.ContextVar("request_id", default="-")
+
+
 class RequestIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        if not hasattr(record, "request_id"):
-            record.request_id = "-"  # type: ignore[attr-defined]
+        record.request_id = request_id_context_var.get()
         return True
 
 
-logging.getLogger().addFilter(RequestIdFilter())
+# Apply filter to all root logger handlers so third-party logs don't crash
+for handler in logging.root.handlers:
+    handler.addFilter(RequestIdFilter())
+
 logger = logging.getLogger("knowledge_base")
 
 # ---------------------------------------------------------------------------
 # Rate Limiter
 # ---------------------------------------------------------------------------
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
 
 # ---------------------------------------------------------------------------
 # Lifespan: initialize embeddings + vector store once at startup
@@ -100,14 +108,17 @@ app.state.limiter = limiter
 # ── CORS ──
 settings = get_settings()
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+allow_all_origins = "*" in origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins if origins else ["*"],
-    allow_credentials=True,
+    allow_credentials=not allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
+    max_age=3600,
 )
+app.add_middleware(SlowAPIMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -118,21 +129,15 @@ async def request_id_middleware(request: Request, call_next) -> Response:
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
     request.state.request_id = request_id
 
-    # Thread the request_id into all log records during this request
-    old_factory = logging.getLogRecordFactory()
+    # Set context var for this async task
+    token = request_id_context_var.set(request_id)
 
-    def record_factory(*args, **kwargs):
-        record = old_factory(*args, **kwargs)
-        record.request_id = request_id  # type: ignore[attr-defined]
-        return record
-
-    logging.setLogRecordFactory(record_factory)
-
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-
-    logging.setLogRecordFactory(old_factory)
-    return response
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        request_id_context_var.reset(token)
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +150,17 @@ async def security_headers_middleware(request: Request, call_next) -> Response:
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline' https:; "
+        "script-src 'self'; "
+        "connect-src 'self' https: http:; "
+        "font-src 'self' data: https:; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
     return response
 
 
@@ -172,6 +188,4 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 # ---------------------------------------------------------------------------
 # Register routers
 # ---------------------------------------------------------------------------
-app.include_router(documents.router)
-app.include_router(chat.router)
-app.include_router(system.router)
+app.include_router(api_router)

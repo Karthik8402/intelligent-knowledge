@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { deleteDocument, getDocumentChunks, listDocuments, uploadDocuments } from '../api';
-import type { DocumentMetadata, RawChunk } from '../types';
-import { showToast } from '../components/Toast';
-import { TableSkeleton } from '../components/Skeleton';
+import { deleteDocument, getDocumentChunks, listDocuments, uploadDocuments } from '../../api';
+import type { DocumentMetadata, RawChunk } from '../../types';
+import ConfirmToast from '../../components/ui/ConfirmToast';
+import { showToast } from '../../shared/Toast';
+import { TableSkeleton } from '../../shared/Skeleton';
 
 export default function DocumentsPage() {
   const [docs, setDocs] = useState<DocumentMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [chunks, setChunks] = useState<RawChunk[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchDocs = async () => {
+  const fetchDocs = useCallback(async () => {
     setLoading(true);
     try {
       setDocs(await listDocuments());
@@ -24,9 +26,9 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void fetchDocs(); }, []);
+  useEffect(() => { void fetchDocs(); }, [fetchDocs]);
 
   /* ── Upload handler ── */
   const handleUpload = useCallback(async (files: File[]) => {
@@ -44,22 +46,33 @@ export default function DocumentsPage() {
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [fetchDocs]);
 
   /* ── Delete ── */
   const removeDoc = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}" from the vector store?`)) return;
     setDeletingId(id);
     try {
       await deleteDocument(id);
       showToast('success', 'Document Deleted', `${name} removed from knowledge base`);
       if (expandedId === id) { setExpandedId(null); setChunks([]); }
-      fetchDocs();
+      void fetchDocs();
     } catch (e: any) {
       showToast('error', 'Delete Failed', e.message);
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const requestDelete = (id: string, name: string) => {
+    if (deletingId) return;
+    setPendingDelete({ id, name });
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const { id, name } = pendingDelete;
+    setPendingDelete(null);
+    await removeDoc(id, name);
   };
 
   /* ── Expand / collapse inline chunks ── */
@@ -98,6 +111,17 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6">
+      <ConfirmToast
+        open={Boolean(pendingDelete)}
+        title="Delete document?"
+        message={pendingDelete ? `"${pendingDelete.name}" will be removed from the vector store.` : ''}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+        tone="danger"
+        busy={Boolean(deletingId)}
+      />
       {/* ── Header ── */}
       <div className="animate-fade-in-up">
         <h3 className="font-headline text-2xl sm:text-3xl font-bold tracking-tight mb-1">Knowledge Base</h3>
@@ -234,7 +258,7 @@ export default function DocumentsPage() {
                   </div>
                   <div className="hidden sm:flex sm:col-span-2 justify-end">
                     <button
-                      onClick={(e) => { e.stopPropagation(); removeDoc(doc.document_id, doc.file_name); }}
+                      onClick={(e) => { e.stopPropagation(); requestDelete(doc.document_id, doc.file_name); }}
                       disabled={deletingId === doc.document_id}
                       className="text-error hover:text-red-400 p-2 rounded-lg hover:bg-error/10 transition-all duration-200 active:scale-90"
                     >
@@ -248,7 +272,7 @@ export default function DocumentsPage() {
                 {/* Mobile delete button */}
                 <div className="sm:hidden px-4 pb-3 flex justify-end">
                   <button
-                    onClick={() => removeDoc(doc.document_id, doc.file_name)}
+                    onClick={() => requestDelete(doc.document_id, doc.file_name)}
                     disabled={deletingId === doc.document_id}
                     className="text-[10px] text-error border border-error/20 px-3 py-1.5 rounded-lg hover:bg-error/10 transition-all"
                   >

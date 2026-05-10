@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from io import BytesIO
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -117,7 +115,13 @@ class TestDocumentsEndpoint:
         assert "Unsupported" in data[0]["error"]
 
     def test_upload_valid_txt_file(self, test_client, mock_vector_store):
-        content = b"This is test content for a valid document upload. " * 10
+        import uuid
+
+        # Use unique content each run to avoid duplicate-hash collisions
+        unique_suffix = uuid.uuid4().hex
+        content = (
+            f"This is test content for a valid document upload. {unique_suffix} ".encode() * 10
+        )
         files = [("files", ("valid.txt", BytesIO(content), "text/plain"))]
         resp = test_client.post("/documents/upload", files=files)
         assert resp.status_code == 200
@@ -208,7 +212,9 @@ class TestChatStreamEndpoint:
         )
         assert resp.status_code == 200
 
-    @pytest.mark.xfail(reason="sse-starlette event loop binding issue with sync TestClient", strict=False)
+    @pytest.mark.xfail(
+        reason="sse-starlette event loop binding issue with sync TestClient", strict=False
+    )
     def test_stream_content_type_is_sse(self, test_client):
         resp = test_client.post(
             "/chat/stream",
@@ -220,7 +226,9 @@ class TestChatStreamEndpoint:
         resp = test_client.post("/chat/stream", json={"question": ""})
         assert resp.status_code == 422
 
-    @pytest.mark.xfail(reason="sse-starlette event loop binding issue with sync TestClient", strict=False)
+    @pytest.mark.xfail(
+        reason="sse-starlette event loop binding issue with sync TestClient", strict=False
+    )
     def test_stream_contains_events(self, test_client):
         resp = test_client.post(
             "/chat/stream",
@@ -243,11 +251,14 @@ class TestSettingsEndpoint:
         assert "vector_store" in data
 
     def test_update_settings(self, test_client):
-        resp = test_client.put("/settings", json={
-            "rag_top_k": 10,
-            "llm_provider": "openai",
-            "vector_store": "faiss",
-        })
+        resp = test_client.put(
+            "/settings",
+            json={
+                "rag_top_k": 10,
+                "llm_provider": "openai",
+                "vector_store": "faiss",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "updated_in_memory"

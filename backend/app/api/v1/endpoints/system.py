@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
+from pathlib import Path
 import platform
 import shutil
 import time
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from ..config import get_settings
-from ..core.auth import UserContext, get_current_user, get_optional_user
-from ..dependencies import get_embeddings_instance, get_registry, get_vector_store_optional
-from ..models import SettingsResponse, SettingsUpdate, StatusResponse
+from app.config import get_settings
+from app.core.auth import UserContext, get_current_user
+from app.dependencies import get_embeddings_instance, get_registry, get_vector_store_optional
+from app.schemas import SettingsResponse, SettingsUpdate, StatusResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["system"])
@@ -53,6 +53,7 @@ def health(
         "uptime_seconds": round(time.time() - _start_time),
         "version": "3.0.0",
         "python_version": platform.python_version(),
+        "disk_free_mb": round(disk_free_mb, 2) if disk_free_mb >= 0 else None,
         "storage_backend": settings.storage_backend,
         "vector_store": settings.vector_store,
         "auth_enabled": settings.auth_enabled,
@@ -67,7 +68,7 @@ def get_status(
     reg=Depends(get_registry),
     user: UserContext = Depends(get_current_user),
 ):
-    """System status — requires authentication."""
+    """System status — optionally requires authentication."""
     docs = reg.list_documents(owner_id=user.user_id)
     doc_count = len(docs)
     chunk_count = sum(doc.get("chunks", 0) for doc in docs)
@@ -87,12 +88,19 @@ def get_status(
 def get_current_settings(
     user: UserContext = Depends(get_current_user),
 ):
-    """Get current settings — requires authentication."""
+    """Get current settings — optionally requires authentication."""
     settings = get_settings()
     return SettingsResponse(
         rag_top_k=settings.rag_top_k,
+        rag_chunk_size=settings.rag_chunk_size,
+        rag_chunk_overlap=settings.rag_chunk_overlap,
         llm_provider=settings.llm_provider,
+        llm_model=settings.llm_model,
+        llm_temperature=settings.llm_temperature,
+        llm_top_p=settings.llm_top_p,
+        embedding_model=settings.embedding_model,
         vector_store=settings.vector_store,
+        max_upload_size_mb=settings.max_upload_size_mb,
     )
 
 
@@ -101,16 +109,30 @@ def update_settings(
     updates: SettingsUpdate,
     user: UserContext = Depends(get_current_user),
 ):
-    """Update settings in memory — requires authentication."""
+    """Update settings in memory — optionally requires authentication."""
     settings = get_settings()
 
     # Apply in-memory updates (does not persist to .env)
     if updates.rag_top_k is not None:
         settings.rag_top_k = updates.rag_top_k
+    if updates.rag_chunk_size is not None:
+        settings.rag_chunk_size = updates.rag_chunk_size
+    if updates.rag_chunk_overlap is not None:
+        settings.rag_chunk_overlap = updates.rag_chunk_overlap
     if updates.llm_provider is not None:
         settings.llm_provider = updates.llm_provider
+    if updates.llm_model is not None:
+        settings.llm_model = updates.llm_model
+    if updates.llm_temperature is not None:
+        settings.llm_temperature = updates.llm_temperature
+    if updates.llm_top_p is not None:
+        settings.llm_top_p = updates.llm_top_p
+    if updates.embedding_model is not None:
+        settings.embedding_model = updates.embedding_model
     if updates.vector_store is not None:
         settings.vector_store = updates.vector_store
+    if updates.max_upload_size_mb is not None:
+        settings.max_upload_size_mb = updates.max_upload_size_mb
 
     logger.info(
         "Settings updated by user=%s: top_k=%d, llm=%s, vs=%s",
@@ -124,7 +146,14 @@ def update_settings(
         "status": "updated_in_memory",
         "settings": SettingsResponse(
             rag_top_k=settings.rag_top_k,
+            rag_chunk_size=settings.rag_chunk_size,
+            rag_chunk_overlap=settings.rag_chunk_overlap,
             llm_provider=settings.llm_provider,
+            llm_model=settings.llm_model,
+            llm_temperature=settings.llm_temperature,
+            llm_top_p=settings.llm_top_p,
+            embedding_model=settings.embedding_model,
             vector_store=settings.vector_store,
+            max_upload_size_mb=settings.max_upload_size_mb,
         ),
     }

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { listDocuments } from '../api';
 import type { DocumentMetadata } from '../types';
-import ToastContainer from './Toast';
+import ToastContainer from '../shared/Toast';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Layout() {
+  const { user, signOut } = useAuth();
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [pageKey, setPageKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -112,14 +114,19 @@ export default function Layout() {
         </nav>
 
         <div className="p-4 mt-auto border-t border-outline-variant/10">
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container transition-all duration-300 cursor-pointer group">
+          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container transition-all duration-300 cursor-pointer group" onClick={() => !user && (window.location.href='/login')}>
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-on-primary-container font-black text-xs transition-transform duration-300 group-hover:scale-110 animate-gradient-shift" style={{ backgroundSize: '200% 200%' }}>
-              AD
+              {user ? (user.email?.substring(0, 2).toUpperCase() || 'U') : 'GU'}
             </div>
             <div className="flex-grow overflow-hidden">
-              <p className="text-xs font-bold text-on-surface truncate tracking-tight">Admin User</p>
-              <p className="text-[10px] text-outline truncate">Local Server</p>
+              <p className="text-xs font-bold text-on-surface truncate tracking-tight">{user ? (user.email || 'User') : 'Guest User'}</p>
+              <p className="text-[10px] text-outline truncate">{user ? 'Authenticated' : 'Click to Sign In'}</p>
             </div>
+            {user && (
+              <button onClick={(e) => { e.stopPropagation(); signOut(); }} className="ml-auto p-1 hover:text-white text-outline transition-colors" title="Sign Out">
+                <span className="material-symbols-outlined text-sm">logout</span>
+              </button>
+            )}
           </div>
         </div>
       </aside>
@@ -133,9 +140,6 @@ export default function Layout() {
           ${isChat ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}
         `}
       >
-        {/* Animated background orbs */}
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary-container/10 rounded-full blur-[120px] -mr-96 -mt-96 pointer-events-none animate-float" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-secondary-container/10 rounded-full blur-[100px] -ml-48 -mb-48 pointer-events-none animate-float" style={{ animationDelay: '2s' }} />
 
         <header className="flex justify-between items-center w-full px-4 sm:px-6 py-4 sticky top-0 z-50 bg-[#10141a]/80 backdrop-blur-md border-b border-[#434654]/15 shadow-[0_40px_60px_-15px_rgba(181,196,255,0.08)] flex-shrink-0">
           <div className="flex items-center gap-3 animate-fade-in-down">

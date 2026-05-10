@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 from functools import lru_cache
-from typing import Any
+import logging
 
 from ..config import get_settings
 

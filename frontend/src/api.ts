@@ -1,7 +1,47 @@
 import { getAccessToken } from './lib/supabase';
 import type { ChatResponse, ChunksResponse, Citation, DocumentMetadata, Settings, SystemStatus, UploadResult } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  'http://127.0.0.1:8000';
+
+const GET_CACHE_TTL_MS = 10_000;
+const HEALTH_CACHE_TTL_MS = 5_000;
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  promise: Promise<T>;
+};
+
+const getCache = new Map<string, CacheEntry<unknown>>();
+
+export function clearApiCache(prefix?: string) {
+  if (!prefix) {
+    getCache.clear();
+    return;
+  }
+
+  for (const key of getCache.keys()) {
+    if (key.startsWith(prefix)) getCache.delete(key);
+  }
+}
+
+function cachedGet<T>(key: string, loader: () => Promise<T>, ttlMs: number = GET_CACHE_TTL_MS): Promise<T> {
+  const now = Date.now();
+  const cached = getCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.promise as Promise<T>;
+  }
+
+  let promise: Promise<T>;
+  promise = loader().catch((error) => {
+    if (getCache.get(key)?.promise === promise) getCache.delete(key);
+    throw error;
+  });
+  getCache.set(key, { expiresAt: now + ttlMs, promise });
+  return promise;
+}
 
 /**
  * Get authorization headers with the current JWT token.
@@ -18,17 +58,19 @@ async function authHeaders(): Promise<Record<string, string>> {
  * Wrapper for fetch that automatically includes auth headers.
  */
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const headers = {
-    ...options.headers,
-    ...(await authHeaders()),
-  };
+  const headers: Record<string, string> = {};
+  new Headers(options.headers).forEach((value, key) => {
+    headers[key] = value;
+  });
+  Object.assign(headers, await authHeaders());
 
   const response = await fetch(url, { ...options, headers });
 
   // Handle auth failures globally
   if (response.status === 401) {
-    // Token expired — redirect to login
-    window.location.href = '/login';
+    clearApiCache();
+    // Don't auto-redirect here, it causes infinite loops if session state is out of sync.
+    // The App.tsx AuthGuard catches invalid sessions securely and react-hot-toast will show this error.
     throw new Error('Authentication expired. Please log in again.');
   }
 
@@ -52,16 +94,20 @@ export async function uploadDocuments(files: File[]): Promise<UploadResult[]> {
     throw new Error(errorData?.detail || errorData?.error || 'Upload failed');
   }
 
-  return response.json() as Promise<UploadResult[]>;
+  const result = await response.json() as UploadResult[];
+  clearApiCache();
+  return result;
 }
 
 export async function listDocuments(): Promise<DocumentMetadata[]> {
-  const response = await authFetch(`${API_BASE_URL}/documents`);
-  if (!response.ok) {
-    throw new Error('Failed to list documents');
-  }
-  const data = await response.json();
-  return data.documents;
+  return cachedGet('GET /documents', async () => {
+    const response = await authFetch(`${API_BASE_URL}/documents`);
+    if (!response.ok) {
+      throw new Error('Failed to list documents');
+    }
+    const data = await response.json();
+    return data.documents;
+  });
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
@@ -71,6 +117,7 @@ export async function deleteDocument(documentId: string): Promise<void> {
   if (!response.ok) {
     throw new Error('Failed to delete document');
   }
+  clearApiCache();
 }
 
 export async function chat(question: string, documentIds?: string[]): Promise<ChatResponse> {
@@ -110,7 +157,7 @@ export async function chatStream(
 
   if (!response.ok) {
     if (response.status === 401) {
-      window.location.href = '/login';
+      onError('Authentication expired. Please log in again.');
       return;
     }
     if (response.status === 429) {
@@ -132,7 +179,10 @@ export async function chatStream(
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      onDone();
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
@@ -169,21 +219,27 @@ export async function chatStream(
 }
 
 export async function getSystemStatus(): Promise<SystemStatus> {
-  const response = await authFetch(`${API_BASE_URL}/status`);
-  if (!response.ok) throw new Error('Failed to get status');
-  return response.json();
+  return cachedGet('GET /status', async () => {
+    const response = await authFetch(`${API_BASE_URL}/status`);
+    if (!response.ok) throw new Error('Failed to get status');
+    return response.json();
+  });
 }
 
 export async function getDocumentChunks(documentId: string): Promise<ChunksResponse> {
-  const response = await authFetch(`${API_BASE_URL}/documents/${documentId}/chunks`);
-  if (!response.ok) throw new Error('Failed to get chunks');
-  return response.json();
+  return cachedGet(`GET /documents/${documentId}/chunks`, async () => {
+    const response = await authFetch(`${API_BASE_URL}/documents/${documentId}/chunks`);
+    if (!response.ok) throw new Error('Failed to get chunks');
+    return response.json();
+  });
 }
 
 export async function getSettings(): Promise<Settings> {
-  const response = await authFetch(`${API_BASE_URL}/settings`);
-  if (!response.ok) throw new Error('Failed to get settings');
-  return response.json();
+  return cachedGet('GET /settings', async () => {
+    const response = await authFetch(`${API_BASE_URL}/settings`);
+    if (!response.ok) throw new Error('Failed to get settings');
+    return response.json();
+  });
 }
 
 export async function updateSettings(settings: Settings): Promise<Settings> {
@@ -194,12 +250,15 @@ export async function updateSettings(settings: Settings): Promise<Settings> {
   });
   if (!response.ok) throw new Error('Failed to update settings');
   const result = await response.json();
+  clearApiCache();
   return result.settings;
 }
 
 export async function getHealth(): Promise<Record<string, unknown>> {
-  // Health endpoint is public — no auth needed
-  const response = await fetch(`${API_BASE_URL}/health`);
-  if (!response.ok) throw new Error('Failed to get health status');
-  return response.json();
+  return cachedGet('GET /health', async () => {
+    // Health endpoint is public — no auth needed
+    const response = await fetch(`${API_BASE_URL}/health`);
+    if (!response.ok) throw new Error('Failed to get health status');
+    return response.json();
+  }, HEALTH_CACHE_TTL_MS);
 }

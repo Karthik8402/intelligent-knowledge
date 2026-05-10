@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--import-mode=importlib",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring external services",
+    "unit: marks pure unit tests with no I/O",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning:langchain",
+    "ignore::UserWarning",
+]

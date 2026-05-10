@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-from langchain_core.documents import Document
-
 from tests.conftest import make_document
 
 
@@ -42,43 +39,44 @@ class TestBuildContext:
 
 
 class TestParseResponse:
-    def test_parse_valid_json(self):
+    def test_parse_extracts_inline_citations(self):
+        """Inline [Source N] references are extracted as citation_indices."""
         from app.generation import _parse_llm_response
 
-        result = _parse_llm_response('{"answer": "test answer", "citation_indices": [1, 2]}')
-        assert result["answer"] == "test answer"
-        assert result["citation_indices"] == [1, 2]
+        text = "The model was trained on ImageNet [Source 1] and refined with RLHF [Source 2]."
+        result = _parse_llm_response(text)
+        assert result["answer"] == text
+        assert 1 in result["citation_indices"]
+        assert 2 in result["citation_indices"]
 
-    def test_parse_json_with_code_fences(self):
+    def test_parse_no_citations_returns_empty_list(self):
         from app.generation import _parse_llm_response
 
-        result = _parse_llm_response('```json\n{"answer": "fenced", "citation_indices": [1]}\n```')
-        assert result["answer"] == "fenced"
-
-    def test_parse_invalid_json_returns_fallback(self):
-        from app.generation import FALLBACK_ANSWER, _parse_llm_response
-
-        result = _parse_llm_response("this is not json at all")
-        assert result["answer"] == FALLBACK_ANSWER
+        result = _parse_llm_response("This is a plain answer with no citations.")
+        assert result["answer"] == "This is a plain answer with no citations."
         assert result["citation_indices"] == []
 
-    def test_parse_missing_fields(self):
-        from app.generation import FALLBACK_ANSWER, _parse_llm_response
-
-        result = _parse_llm_response('{"random": "data"}')
-        assert result["answer"] == FALLBACK_ANSWER
-
-    def test_parse_invalid_citation_type(self):
+    def test_parse_deduplicates_citation_indices(self):
+        """Duplicate [Source N] mentions should only appear once."""
         from app.generation import _parse_llm_response
 
-        result = _parse_llm_response('{"answer": "ok", "citation_indices": "not a list"}')
-        assert result["citation_indices"] == []
+        text = "See [Source 1]. Also [Source 1] confirms this."
+        result = _parse_llm_response(text)
+        assert result["citation_indices"].count(1) == 1
 
-    def test_parse_empty_string(self):
+    def test_parse_empty_string_returns_fallback(self):
         from app.generation import FALLBACK_ANSWER, _parse_llm_response
 
         result = _parse_llm_response("")
         assert result["answer"] == FALLBACK_ANSWER
+        assert result["citation_indices"] == []
+
+    def test_parse_case_insensitive_source_tag(self):
+        from app.generation import _parse_llm_response
+
+        result = _parse_llm_response("Answer from [source 3] and [SOURCE 4].")
+        assert 3 in result["citation_indices"]
+        assert 4 in result["citation_indices"]
 
 
 class TestBuildMessages:
@@ -86,9 +84,7 @@ class TestBuildMessages:
         from app.generation import _build_messages
 
         with patch("app.generation.get_settings") as mock_settings:
-            mock_settings.return_value = MagicMock(
-                llm_provider="openai", llm_model="gpt-4"
-            )
+            mock_settings.return_value = MagicMock(llm_provider="openai", llm_model="gpt-4")
             messages = _build_messages("What is AI?", "context here")
             assert len(messages) == 2  # SystemMessage + HumanMessage
 
@@ -125,18 +121,19 @@ class TestAnswerWithCitations:
 
     @patch("app.generation.get_chat_model")
     def test_valid_llm_response(self, mock_get_model):
+        """LLM returns plain text with inline [Source N] — parsed correctly."""
         from app.generation import answer_with_citations
 
         mock_response = MagicMock()
-        mock_response.content = '{"answer": "Test answer", "citation_indices": [1]}'
+        mock_response.content = "Test answer [Source 1]"
         mock_model = MagicMock()
         mock_model.invoke.return_value = mock_response
         mock_get_model.return_value = mock_model
 
         docs = [(make_document(), 0.9)]
         result = answer_with_citations("question", docs)
-        assert result["answer"] == "Test answer"
-        assert result["citation_indices"] == [1]
+        assert result["answer"] == "Test answer [Source 1]"
+        assert 1 in result["citation_indices"]
 
 
 class TestStreamAnswerWithCitations:
@@ -172,10 +169,17 @@ class TestStreamAnswerWithCitations:
 
 
 class TestGetSystemPrompt:
-    def test_system_prompt_contains_json_shape(self):
+    def test_system_prompt_instructs_inline_citations(self):
         from app.generation import _get_system_prompt
 
         prompt = _get_system_prompt()
-        assert "JSON" in prompt
-        assert "citation_indices" in prompt
-        assert "answer" in prompt
+        # Current prompt uses inline [Source N] citation style
+        assert "Source" in prompt or "citation" in prompt.lower()
+        assert "context" in prompt.lower()
+
+    def test_system_prompt_mentions_fallback_phrase(self):
+        from app.generation import FALLBACK_ANSWER, _get_system_prompt
+
+        prompt = _get_system_prompt()
+        # Prompt should instruct LLM to use the exact fallback phrase
+        assert "do not contain" in prompt.lower() or FALLBACK_ANSWER[:20] in prompt

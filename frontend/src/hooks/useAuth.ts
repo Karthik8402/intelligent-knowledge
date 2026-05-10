@@ -1,6 +1,16 @@
-import { useEffect, useState } from 'react';
+import {
+  createContext,
+  createElement,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { authEnabled, supabase } from '../lib/supabase';
+import { clearApiCache } from '../api';
 
 type AuthState = {
   user: User | null;
@@ -8,27 +18,62 @@ type AuthState = {
   loading: boolean;
 };
 
-export function useAuth() {
+type AuthContextValue = AuthState & {
+  signInWithEmail: (email: string, password: string) => Promise<unknown>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    profile?: { full_name?: string; phone?: string; timezone?: string }
+  ) => Promise<unknown>;
+  signOut: () => Promise<void>;
+  resetPasswordForEmail: (email: string) => Promise<void>;
+  updateUserPassword: (password: string) => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     session: null,
-    loading: true,
+    loading: authEnabled,
   });
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!authEnabled) {
       setState({
-        user: session?.user ?? null,
-        session,
+        user: null,
+        session: null,
         loading: false,
       });
-    });
+      return;
+    }
 
-    // Listen for auth state changes
+    let active = true;
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!active) return;
+        setState({
+          user: session?.user ?? null,
+          session,
+          loading: false,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setState({
+          user: null,
+          session: null,
+          loading: false,
+        });
+      });
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      clearApiCache();
       setState({
         user: session?.user ?? null,
         session,
@@ -36,28 +81,99 @@ export function useAuth() {
       });
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const signInWithEmail = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
+    if (!authEnabled) {
+      throw new Error('Authentication is disabled for this environment.');
+    }
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-  };
+    return data;
+  }, []);
 
-  const signUpWithEmail = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+  const signUpWithEmail = useCallback(async (
+    email: string,
+    password: string,
+    profile?: { full_name?: string; phone?: string; timezone?: string }
+  ) => {
+    if (!authEnabled) {
+      throw new Error('Authentication is disabled for this environment.');
+    }
+    const dataPayload = profile
+      ? Object.fromEntries(
+          Object.entries(profile).filter(([, value]) => value && value.toString().trim().length > 0)
+        )
+      : undefined;
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+        data: dataPayload,
+      },
+    });
     if (error) throw error;
-  };
+    return data;
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
+    if (!authEnabled) {
+      return;
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-  };
+    clearApiCache();
+  }, []);
 
-  return {
-    ...state,
-    signInWithEmail,
-    signUpWithEmail,
-    signOut,
-  };
+  const resetPasswordForEmail = useCallback(async (email: string) => {
+    if (!authEnabled) {
+      throw new Error('Authentication is disabled for this environment.');
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  }, []);
+
+  const updateUserPassword = useCallback(async (password: string) => {
+    if (!authEnabled) {
+      throw new Error('Authentication is disabled for this environment.');
+    }
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      ...state,
+      signInWithEmail,
+      signUpWithEmail,
+      signOut,
+      resetPasswordForEmail,
+      updateUserPassword,
+    }),
+    [
+      state,
+      signInWithEmail,
+      signUpWithEmail,
+      signOut,
+      resetPasswordForEmail,
+      updateUserPassword,
+    ],
+  );
+
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used inside AuthProvider');
+  }
+  return context;
 }

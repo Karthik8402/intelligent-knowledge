@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
+import pytest
 
 # ---------------------------------------------------------------------------
 # Ensure test-safe environment variables before any app module imports
@@ -21,6 +19,27 @@ os.environ.setdefault("SQLITE_DB_PATH", "./data/test_knowledge_base.db")
 os.environ.setdefault("STORAGE_BACKEND", "local")
 os.environ.setdefault("VECTOR_STORE", "chroma")
 os.environ.setdefault("AUTH_ENABLED", "false")
+
+
+# ---------------------------------------------------------------------------
+# Session-level cleanup: wipe the stale shared test registry before run
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True, scope="session")
+def clean_test_registry():
+    """Delete the shared test_registry.json BEFORE the session starts.
+
+    This prevents false 'duplicate' results caused by documents uploaded
+    during prior test sessions polluting the content hash database.
+    The data/ directory is created fresh so subsequent tests can write to it.
+    """
+    data_dir = Path("./data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    stale_path = data_dir / "test_registry.json"
+    if stale_path.exists():
+        stale_path.unlink()
+
+    yield  # Let all tests run — do NOT delete the file after (tests need it)
 
 
 # ---------------------------------------------------------------------------
@@ -66,12 +85,17 @@ def tmp_registry(tmp_path: Path):
     os.environ["STORAGE_BACKEND"] = "local"
     os.environ["AUTH_ENABLED"] = "false"
 
+    from app import ingest, storage
     from app.storage import LocalDocumentRegistry
 
     reg = LocalDocumentRegistry()
+    original_storage_registry = storage.registry
+    storage.registry = reg
+    ingest.storage.registry = reg
     yield reg
 
-    # Cleanup
+    storage.registry = original_storage_registry
+    ingest.storage.registry = original_storage_registry
     get_settings.cache_clear()
 
 
@@ -95,27 +119,21 @@ def mock_vector_store() -> MagicMock:
 @pytest.fixture()
 def test_client(tmp_registry, mock_vector_store) -> TestClient:
     """TestClient wired with mocked vector store and temporary registry."""
-    from app.dependencies import set_embeddings, set_vector_store
+    from app.dependencies import get_registry, set_embeddings, set_vector_store
     from app.main import app
 
     set_vector_store(mock_vector_store)
     set_embeddings(MagicMock())
 
-    # Override the registry dependency to use our temp one
-    from app import dependencies
-
-    original_get_registry = dependencies.get_registry
-
-    def _override_registry():
+    def override_registry():
         return tmp_registry
 
-    dependencies.get_registry = _override_registry
+    app.dependency_overrides[get_registry] = override_registry
 
     client = TestClient(app)
     yield client
 
-    # Restore
-    dependencies.get_registry = original_get_registry
+    app.dependency_overrides.clear()
     set_vector_store(None)
     set_embeddings(None)
 

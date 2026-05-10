@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from io import BytesIO
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi import UploadFile
 from langchain_core.documents import Document
+import pytest
 
 
 class TestEnrichMetadata:
@@ -41,10 +39,7 @@ class TestEnrichMetadata:
     def test_multiple_documents_indexed(self):
         from app.ingest import _enrich_metadata
 
-        docs = [
-            Document(page_content=f"Page {i}", metadata={"page": i})
-            for i in range(5)
-        ]
+        docs = [Document(page_content=f"Page {i}", metadata={"page": i}) for i in range(5)]
         enriched = _enrich_metadata(docs, "doc-003", "manual.pdf")
 
         assert len(enriched) == 5
@@ -137,9 +132,13 @@ class TestIngestFiles:
         assert "Unsupported" in results[0]["error"]
 
     def test_successful_txt_ingestion(self, tmp_registry, mock_vector_store, tmp_path):
+        import uuid
+
         from app.ingest import ingest_files
 
-        content = b"This is test content for ingestion. " * 20
+        # Use unique content per run so the content hash is always fresh
+        unique_marker = uuid.uuid4().hex
+        content = f"This is test content for ingestion. Unique: {unique_marker} ".encode() * 20
         mock_upload = MagicMock(spec=UploadFile)
         mock_upload.filename = "test_doc.txt"
         mock_upload.file = BytesIO(content)
