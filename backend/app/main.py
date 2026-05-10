@@ -188,4 +188,11 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 # ---------------------------------------------------------------------------
 # Register routers
 # ---------------------------------------------------------------------------
+@app.get("/")
+async def root() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "message": "Intelligent Knowledge Base API is running",
+    }
+
 app.include_router(api_router)
