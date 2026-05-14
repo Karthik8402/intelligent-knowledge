@@ -129,7 +129,8 @@ export async function chat(question: string, documentIds?: string[]): Promise<Ch
 
   if (!response.ok) {
     if (response.status === 429) throw new Error('Rate limit exceeded. Please wait a moment.');
-    throw new Error('Failed to send message');
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || errorData?.error || 'Failed to send message');
   }
 
   return response.json() as Promise<ChatResponse>;
@@ -140,6 +141,7 @@ export async function chat(question: string, documentIds?: string[]): Promise<Ch
  */
 export async function chatStream(
   question: string,
+  documentIds: string[] | undefined,
   onToken: (token: string) => void,
   onCitations: (citations: Citation[]) => void,
   onDone: () => void,
@@ -152,7 +154,7 @@ export async function chatStream(
   const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, document_ids: documentIds?.length ? documentIds : null }),
   });
 
   if (!response.ok) {
@@ -164,7 +166,8 @@ export async function chatStream(
       onError('Rate limit exceeded. Please wait a moment.');
       return;
     }
-    onError('Failed to connect to chat stream');
+    const errorData = await response.json().catch(() => null);
+    onError(errorData?.detail || errorData?.error || 'Failed to connect to chat stream');
     return;
   }
 
@@ -221,7 +224,10 @@ export async function chatStream(
 export async function getSystemStatus(): Promise<SystemStatus> {
   return cachedGet('GET /status', async () => {
     const response = await authFetch(`${API_BASE_URL}/status`);
-    if (!response.ok) throw new Error('Failed to get status');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || errorData?.error || 'Failed to get status');
+    }
     return response.json();
   });
 }
@@ -229,7 +235,10 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 export async function getDocumentChunks(documentId: string): Promise<ChunksResponse> {
   return cachedGet(`GET /documents/${documentId}/chunks`, async () => {
     const response = await authFetch(`${API_BASE_URL}/documents/${documentId}/chunks`);
-    if (!response.ok) throw new Error('Failed to get chunks');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || errorData?.error || 'Failed to get chunks');
+    }
     return response.json();
   });
 }
@@ -237,7 +246,10 @@ export async function getDocumentChunks(documentId: string): Promise<ChunksRespo
 export async function getSettings(): Promise<Settings> {
   return cachedGet('GET /settings', async () => {
     const response = await authFetch(`${API_BASE_URL}/settings`);
-    if (!response.ok) throw new Error('Failed to get settings');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || errorData?.error || 'Failed to get settings');
+    }
     return response.json();
   });
 }
@@ -248,7 +260,10 @@ export async function updateSettings(settings: Settings): Promise<Settings> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
   });
-  if (!response.ok) throw new Error('Failed to update settings');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || errorData?.error || 'Failed to update settings');
+  }
   const result = await response.json();
   clearApiCache();
   return result.settings;
@@ -258,7 +273,28 @@ export async function getHealth(): Promise<Record<string, unknown>> {
   return cachedGet('GET /health', async () => {
     // Health endpoint is public — no auth needed
     const response = await fetch(`${API_BASE_URL}/health`);
-    if (!response.ok) throw new Error('Failed to get health status');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || errorData?.error || 'Failed to get health status');
+    }
     return response.json();
   }, HEALTH_CACHE_TTL_MS);
+}
+
+export async function getUsage(): Promise<any> {
+  const response = await authFetch(`${API_BASE_URL}/usage`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || errorData?.error || 'Failed to get usage stats');
+  }
+  return response.json();
+}
+
+export async function getSystemConfig(): Promise<any> {
+  const response = await authFetch(`${API_BASE_URL}/system/config`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || errorData?.error || 'Failed to get system config');
+  }
+  return response.json();
 }

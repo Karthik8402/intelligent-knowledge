@@ -7,8 +7,10 @@ import ChunksPage from './features/documents/ChunksPage';
 import DocumentsPage from './features/documents/DocumentsPage';
 import SettingsPage from './pages/SettingsPage';
 import StatusPage from './pages/StatusPage';
+import DashboardPage from './pages/Dashboard';
+import ProfilePage from './pages/ProfilePage';
 
-// New Pages
+// Auth Pages
 import HomePage from './pages/Home';
 import LoginPage from './features/auth/Login';
 import RegisterPage from './features/auth/Register';
@@ -25,17 +27,17 @@ function DashboardRoutes() {
     return <LoadingSpinner />;
   }
 
-  // Removed the navigation guard to allow guest access to documents and chat.
-
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/documents" replace />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="chunks" element={<ChunksPage />} />
         <Route path="status" element={<StatusPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Routes>
   );

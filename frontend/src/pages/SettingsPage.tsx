@@ -3,14 +3,11 @@ import { getSettings, updateSettings } from '../api';
 import type { Settings } from '../types';
 import { showToast } from '../shared/Toast';
 
+import { MODEL_CONFIG, VECTOR_STORES, EMBEDDING_MODELS } from '../config/branding';
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const modelOptions: Record<string, string[]> = {
-    google: ['gemini-2.5-flash-lite', 'gemini-1.5-pro', 'gemma-3-27b-it'],
-    nvidia: ['minimaxai/minimax-m2.7'],
-  };
 
   useEffect(() => {
     void getSettings().then(setSettings).catch(console.error);
@@ -115,15 +112,17 @@ export default function SettingsPage() {
                 value={settings.llm_provider}
                 onChange={(e) => {
                   const nextProvider = e.target.value;
-                  const nextModels = modelOptions[nextProvider] || [];
-                  const nextModel = nextModels.includes(settings.llm_model)
-                    ? settings.llm_model
-                    : (nextModels[0] || settings.llm_model);
+                  const nextModels = MODEL_CONFIG[nextProvider]?.models || [];
+                  const currentModelId = settings.llm_model;
+                  const nextModel = nextModels.some(m => m.id === currentModelId)
+                    ? currentModelId
+                    : (nextModels[0]?.id || currentModelId);
                   setSettings({ ...settings, llm_provider: nextProvider, llm_model: nextModel });
                 }}
               >
-                <option value="google">Google (Gemini / Gemma)</option>
-                <option value="nvidia">NVIDIA (AI Endpoints)</option>
+                {Object.entries(MODEL_CONFIG).map(([key, provider]) => (
+                  <option key={key} value={key}>{provider.displayName}</option>
+                ))}
               </select>
             </div>
 
@@ -137,11 +136,12 @@ export default function SettingsPage() {
                 value={settings.llm_model}
                 onChange={(e) => setSettings({ ...settings, llm_model: e.target.value })}
               >
-                {(modelOptions[settings.llm_provider] || [settings.llm_model]).map((model) => (
-                  <option key={model} value={model}>{model}</option>
+                {(MODEL_CONFIG[settings.llm_provider]?.models || []).map((model) => (
+                  <option key={model.id} value={model.id}>{model.name}</option>
                 ))}
-                {!modelOptions[settings.llm_provider]?.includes(settings.llm_model) && (
-                  <option value={settings.llm_model}>{settings.llm_model}</option>
+                {/* Fallback for models not in config */}
+                {!(MODEL_CONFIG[settings.llm_provider]?.models || []).some(m => m.id === settings.llm_model) && (
+                  <option value={settings.llm_model}>{settings.llm_model} (custom)</option>
                 )}
               </select>
             </div>
@@ -151,12 +151,18 @@ export default function SettingsPage() {
                 <span className="material-symbols-outlined text-sm text-primary/60">auto_awesome</span>
                 Embedding Model
               </label>
-              <input
-                type="text"
-                className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300"
+              <select
+                className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:ring-2 ring-primary/50 focus-glow transition-all duration-300 cursor-pointer"
                 value={settings.embedding_model}
                 onChange={(e) => setSettings({ ...settings, embedding_model: e.target.value })}
-              />
+              >
+                {EMBEDDING_MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>{model.name}</option>
+                ))}
+                {!EMBEDDING_MODELS.some(m => m.id === settings.embedding_model) && (
+                  <option value={settings.embedding_model}>{settings.embedding_model} (custom)</option>
+                )}
+              </select>
             </div>
 
             <div>
@@ -169,8 +175,9 @@ export default function SettingsPage() {
                 value={settings.vector_store}
                 onChange={(e) => setSettings({ ...settings, vector_store: e.target.value })}
               >
-                <option value="chroma">ChromaDB (recommended)</option>
-                <option value="faiss">FAISS (in-memory)</option>
+                {VECTOR_STORES.map((store) => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
               </select>
             </div>
           </div>

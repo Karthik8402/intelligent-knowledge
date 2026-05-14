@@ -15,23 +15,23 @@ class TestSettings:
         os.environ["CHROMA_PERSIST_DIR"] = str(tmp_path / "chroma")
         os.environ["METADATA_DB_PATH"] = str(tmp_path / "registry.json")
 
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.llm_provider == "google"
         # llm_model default — check the actual value rather than hardcoding a specific model
         assert s.llm_model  # non-empty string
         assert s.vector_store == "chroma"
-        assert s.rag_top_k == 5
-        assert s.rag_chunk_size == 1000
-        assert s.rag_chunk_overlap == 200
+        assert s.rag_top_k == 6
+        assert s.rag_chunk_size == 800
+        assert s.rag_chunk_overlap == 150
         assert s.max_upload_size_mb == 25
 
     def test_embedding_defaults(self, tmp_path):
         from app.config import Settings
 
         os.environ["METADATA_DB_PATH"] = str(tmp_path / "registry.json")
-        s = Settings()
+        s = Settings(_env_file=None)
         assert s.embedding_provider == "google"
-        assert s.embedding_model == "gemini-embedding-001"
+        assert s.embedding_model == "text-embedding-004"
 
     def test_reads_env_overrides(self, tmp_path, monkeypatch):
         from app.config import Settings

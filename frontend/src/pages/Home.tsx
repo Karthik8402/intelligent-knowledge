@@ -1,211 +1,251 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import {
+  ArrowRight,
+  CheckCircle2,
+  Database,
+  FileText,
+  LockKeyhole,
+  MessageSquareText,
+  Search,
+  Shield,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
-import { Database, Search, Shield, Zap, ArrowRight } from 'lucide-react';
+import { BRAND } from '../config/branding';
+
+const featureCards = [
+  {
+    icon: Database,
+    title: 'Document Memory',
+    copy: 'Upload PDFs and docs, then keep searchable chunks tied back to their original files.',
+  },
+  {
+    icon: MessageSquareText,
+    title: 'Grounded Chat',
+    copy: 'Ask natural questions and get answers shaped by the documents in your workspace.',
+  },
+  {
+    icon: Shield,
+    title: 'Private Workspace',
+    copy: 'Authentication, owner-scoped retrieval, and API guardrails keep each workspace separated.',
+  },
+];
+
+const workflow = ['Upload', 'Index', 'Retrieve', 'Answer'];
+
+function PublicNav() {
+  const { user } = useAuth();
+
+  return (
+    <nav className="sticky top-0 z-50 border-b border-outline-variant/20 bg-[#10141a]/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
+            <Zap className="h-5 w-5 text-primary" />
+          </div>
+          <span className="truncate font-headline text-lg font-bold tracking-tight text-on-surface sm:text-xl">
+            {BRAND.name}
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          {user ? (
+            <Link to="/dashboard">
+              <Button size="sm">Dashboard</Button>
+            </Link>
+          ) : (
+            <>
+              <Link to="/login">
+                <Button variant="ghost" size="sm" className="px-2 sm:px-3">
+                  Sign in
+                </Button>
+              </Link>
+              <Link to="/register">
+                <Button size="sm">Get started</Button>
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}
 
 export default function HomePage() {
   const { user } = useAuth();
-  const profileName = user?.user_metadata?.full_name || user?.email || 'Your Workspace';
-  const profileEmail = user?.email || 'sign-in required';
-  const profileTimezone = user?.user_metadata?.timezone || 'Local timezone';
 
   return (
-    <div className="min-h-screen bg-[#0b0f14] text-zinc-100 overflow-x-hidden selection:bg-indigo-500/30">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-zinc-800/40 bg-[#0b0f14]/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-[0_0_18px_rgba(129,140,248,0.4)]">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold tracking-tight font-['Space_Grotesk']">Quick Knowledge</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {user ? (
-              <Link to="/documents">
-                <Button variant="secondary" size="sm">Dashboard</Button>
-              </Link>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link to="/login" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-                  Sign In
-                </Link>
-                <Link to="/register">
-                  <Button size="sm">Get Started</Button>
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-background text-on-surface">
+      <PublicNav />
 
-      {/* Hero Section */}
-      <main className="pt-28 pb-16 sm:pt-36 sm:pb-24 lg:pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative">
-        {/* Glow effects */}
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[900px] h-[450px] bg-indigo-600/20 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[600px] h-[300px] bg-purple-600/20 rounded-full blur-[130px] pointer-events-none" />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center relative z-10">
+      <main>
+        <section className="mx-auto grid max-w-7xl gap-10 px-4 pb-12 pt-10 sm:px-6 sm:pb-16 sm:pt-14 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:pb-20 lg:pt-20">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="lg:col-span-7"
+            transition={{ duration: 0.45 }}
+            className="flex flex-col justify-center"
           >
-            <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium text-indigo-300 bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/20 mb-8">
-              v3.0 Production Ready
-            </span>
-          </motion.div>
-          
-          <motion.h1 
-            className="lg:col-span-7 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 font-['Space_Grotesk']"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            Intelligent Knowledge Base <br className="hidden sm:block" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-sky-300">
-              Designed for fast, grounded answers
-            </span>
-          </motion.h1>
-          
-          <motion.p 
-            className="lg:col-span-7 max-w-2xl text-base sm:text-lg text-zinc-400 mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            Upload documents, index them in your vector store, and chat with a multi-agent RAG workflow that stays grounded and fast.
-          </motion.p>
-          
-          <motion.div 
-            className="lg:col-span-7 flex flex-col sm:flex-row items-center justify-start gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            {user ? (
-              <Link to="/documents">
-                <Button size="lg" className="w-full sm:w-auto group">
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <div className="mb-6 inline-flex w-fit items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
+              <Sparkles className="h-4 w-4" />
+              Retrieval-first answers for your files
+            </div>
+
+            <h1 className="max-w-3xl font-headline text-4xl font-bold leading-tight tracking-tight text-on-surface sm:text-5xl lg:text-6xl">
+              Turn your documents into a fast, searchable knowledge workspace.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-on-surface-variant sm:text-lg">
+              Quick Knowledge helps you upload documents, retrieve the right chunks, and chat with answers that stay close to your sources.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link to={user ? '/dashboard' : '/register'} className="w-full sm:w-auto">
+                <Button size="lg" className="w-full gap-2 sm:w-auto">
+                  {user ? 'Open dashboard' : 'Create workspace'}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-            ) : (
-              <>
-                <Link to="/register">
-                  <Button size="lg" className="w-full sm:w-auto">Start for free</Button>
+              {!user && (
+                <Link to="/login" className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto">
+                    Sign in
+                  </Button>
                 </Link>
-                <Link to="/login">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto">Sign in</Button>
-                </Link>
-              </>
-            )}
+              )}
+            </div>
+
+            <div className="mt-8 grid gap-3 text-sm text-on-surface-variant sm:grid-cols-3">
+              {['Source-backed responses', 'Multi-provider LLMs', 'Secure user scope'].map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#7dd3a8]" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.35 }}
-            className="lg:col-span-5"
+            transition={{ duration: 0.45, delay: 0.08 }}
+            className="min-w-0"
           >
-            <div className="bg-[#121720]/70 border border-zinc-800/70 rounded-3xl p-6 backdrop-blur-xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8)]">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-indigo-300" />
+            <div className="overflow-hidden rounded-lg border border-outline-variant/25 bg-surface-container-low shadow-2xl shadow-black/30">
+              <div className="flex items-center justify-between border-b border-outline-variant/20 bg-surface-container-lowest px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-2.5 w-2.5 rounded-full bg-error" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-tertiary" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-[#7dd3a8]" />
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.25em] text-zinc-400">Workspace</p>
-                  <h3 className="text-lg font-semibold text-zinc-100">{profileName}</h3>
-                </div>
+                <span className="text-xs font-medium uppercase tracking-widest text-outline">Knowledge Chat</span>
               </div>
-              <div className="space-y-3 text-sm text-zinc-400">
-                <div className="flex items-center justify-between">
-                  <span>Signed in as</span>
-                  <span className="text-zinc-200 truncate max-w-[60%] text-right">{profileEmail}</span>
+
+              <div className="grid gap-0 md:grid-cols-[0.72fr_1fr]">
+                <aside className="border-b border-outline-variant/20 bg-[#0a0e14] p-4 md:border-b-0 md:border-r">
+                  <div className="mb-4 flex items-center gap-2 rounded-md border border-outline-variant/20 bg-surface px-3 py-2 text-sm text-outline">
+                    <Search className="h-4 w-4" />
+                    Search documents
+                  </div>
+                  <div className="space-y-2">
+                    {['Karthik_K Resume.pdf', 'Project Notes.docx', 'Policy Handbook.pdf'].map((file, index) => (
+                      <div
+                        key={file}
+                        className={`rounded-md border px-3 py-3 ${
+                          index === 0
+                            ? 'border-primary/25 bg-primary/10'
+                            : 'border-outline-variant/15 bg-surface-container-low'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 shrink-0 text-primary" />
+                          <p className="truncate text-sm font-medium text-on-surface">{file}</p>
+                        </div>
+                        <p className="mt-1 text-xs text-outline">{index === 0 ? '12 chunks indexed' : 'Ready for retrieval'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </aside>
+
+                <div className="space-y-4 p-4 sm:p-5">
+                  <div className="rounded-lg border border-outline-variant/20 bg-background p-4">
+                    <p className="text-sm font-medium text-on-surface">What skills are listed in this resume?</p>
+                  </div>
+                  <div className="rounded-lg border border-primary/20 bg-primary/10 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary">
+                      <Zap className="h-4 w-4" />
+                      Answer
+                    </div>
+                    <p className="text-sm leading-6 text-on-surface-variant">
+                      The resume highlights full-stack development, document processing, vector search, API design, and deployment workflows.
+                    </p>
+                    <div className="mt-4 rounded-md border border-outline-variant/20 bg-surface-container-lowest px-3 py-2 text-xs text-outline">
+                      Source: Karthik_K Resume.pdf, Page 1
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>Timezone</span>
-                  <span className="text-zinc-200">{profileTimezone}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Security</span>
-                  <span className="text-emerald-300">Protected</span>
-                </div>
-              </div>
-              <div className="mt-6 flex flex-col gap-3">
-                {user ? (
-                  <Link to="/documents">
-                    <Button size="lg" className="w-full">Open Dashboard</Button>
-                  </Link>
-                ) : (
-                  <Link to="/register">
-                    <Button size="lg" className="w-full">Create your workspace</Button>
-                  </Link>
-                )}
               </div>
             </div>
           </motion.div>
-        </div>
+        </section>
+
+        <section className="border-y border-outline-variant/20 bg-surface-container-lowest">
+          <div className="mx-auto grid max-w-7xl gap-4 px-4 py-8 sm:grid-cols-4 sm:px-6 lg:px-8">
+            {workflow.map((step, index) => (
+              <div key={step} className="flex items-center gap-3 rounded-lg border border-outline-variant/15 bg-background px-4 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-bold text-primary">
+                  {index + 1}
+                </span>
+                <span className="font-medium text-on-surface">{step}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-2xl">
+            <p className="text-sm font-semibold uppercase tracking-widest text-primary">Built for daily retrieval work</p>
+            <h2 className="mt-3 font-headline text-3xl font-bold tracking-tight text-on-surface sm:text-4xl">
+              A cleaner way to ask questions across uploaded knowledge.
+            </h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {featureCards.map(({ icon: Icon, title, copy }) => (
+              <div key={title} className="rounded-lg border border-outline-variant/20 bg-surface-container-low p-5">
+                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
+                  <Icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-headline text-lg font-semibold text-on-surface">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-on-surface-variant">{copy}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+          <div className="grid gap-4 rounded-lg border border-outline-variant/20 bg-surface-container-low p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-primary">
+                <LockKeyhole className="h-4 w-4" />
+                Workspace ready
+              </div>
+              <h2 className="font-headline text-2xl font-bold tracking-tight text-on-surface">Start with your documents, not a blank chat.</h2>
+            </div>
+            <Link to={user ? '/dashboard' : '/register'} className="w-full sm:w-auto">
+              <Button size="lg" className="w-full gap-2 sm:w-auto">
+                {user ? 'Go to dashboard' : 'Get started'}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </section>
       </main>
 
-      {/* Features Grid */}
-      <section className="py-20 bg-[#0a0e14]/70 border-t border-zinc-800/50 relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight mb-4 font-['Space_Grotesk']">Enterprise-grade architecture</h2>
-            <p className="text-zinc-400 max-w-xl mx-auto">Built on a modern stack that keeps responses fast, grounded, and secure.</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="p-6 rounded-2xl bg-[#0f141c] border border-zinc-800/80 shadow-lg"
-            >
-              <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-6 ring-1 ring-blue-500/20">
-                <Database className="w-6 h-6 text-blue-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">Supabase + pgvector</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                Securely store documents in Supabase Storage and embeddings in Postgres with pgvector. Fully isolated via Row Level Security (RLS).
-              </p>
-            </motion.div>
-
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="p-6 rounded-2xl bg-[#0f141c] border border-zinc-800/80 shadow-lg"
-            >
-              <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mb-6 ring-1 ring-purple-500/20">
-                <Search className="w-6 h-6 text-purple-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">LangGraph Agents</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                Multi-agent architecture that retrieves, grades relevance, and generates answers. Includes self-correction to avoid hallucinations.
-              </p>
-            </motion.div>
-
-            <motion.div 
-              whileHover={{ y: -5 }}
-              className="p-6 rounded-2xl bg-[#0f141c] border border-zinc-800/80 shadow-lg"
-            >
-              <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-6 ring-1 ring-green-500/20">
-                <Shield className="w-6 h-6 text-green-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">Secure by Design</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                JWT-based authentication, prompt injection guardrails, strict Pydantic schemas, and robust API rate limiting via FastAPI.
-              </p>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-      
-      {/* Footer */}
-      <footer className="border-t border-zinc-800/50 py-8 bg-[#0b0f14]">
-        <div className="max-w-7xl mx-auto px-4 text-center text-zinc-500 text-sm">
-          &copy; {new Date().getFullYear()} Quick Knowledge. Built by Karthi.
-        </div>
+      <footer className="border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-6 text-center text-sm text-outline">
+        &copy; {new Date().getFullYear()} {BRAND.name}. Built by {BRAND.author}.
       </footer>
     </div>
   );

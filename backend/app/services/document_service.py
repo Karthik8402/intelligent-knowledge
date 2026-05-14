@@ -39,15 +39,25 @@ class DocumentService:
             "Deleting document %s (%s) by user=%s", document_id, doc.get("file_name"), owner_id
         )
 
-        # Delete from vector store
-        if settings.vector_store.lower() in {"chroma", "pgvector"}:
-            try:
+        # Delete from vector store — try metadata filter first, then ID-based
+        try:
+            if settings.vector_store.lower() in {"chroma", "pgvector"}:
                 if hasattr(vector_store, "delete"):
                     vector_store.delete(where={"document_id": document_id})
                     if hasattr(vector_store, "persist"):
                         vector_store.persist()
-            except Exception as e:
-                logger.warning("Failed to delete chunks from vector store: %s", e)
+                    logger.info("Deleted vectors for document %s from %s", document_id, settings.vector_store)
+            elif hasattr(vector_store, "docstore"):
+                # FAISS: remove by filtering docstore
+                ids_to_remove = [
+                    k for k, v in vector_store.docstore._dict.items()
+                    if v.metadata.get("document_id") == document_id
+                ]
+                if ids_to_remove and hasattr(vector_store, "delete"):
+                    vector_store.delete(ids_to_remove)
+                    logger.info("Deleted %d FAISS vectors for document %s", len(ids_to_remove), document_id)
+        except Exception as e:
+            logger.warning("Failed to delete chunks from vector store: %s", e)
 
         removed = reg.delete(document_id)
 
@@ -64,17 +74,24 @@ class DocumentService:
         return {"status": "deleted", "document": removed}
 
     @staticmethod
-    def get_chunks(document_id: str, vector_store: Any):
+    def get_chunks(document_id: str, vector_store: Any, owner_id: str | None = None):
+        """Retrieve chunks for a document, with optional owner_id verification."""
         chunks: list[dict] = []
 
         if hasattr(vector_store, "docstore"):
             for doc in vector_store.docstore._dict.values():
-                if doc.metadata.get("document_id") == document_id:
+                meta = doc.metadata or {}
+                if meta.get("document_id") == document_id:
+                    if owner_id and owner_id != "anonymous" and meta.get("owner_id") != owner_id:
+                        continue
                     text = doc.page_content if hasattr(doc, "page_content") else str(doc)
-                    chunks.append({"text": text, "page": doc.metadata.get("page")})
+                    chunks.append({"text": text, "page": meta.get("page")})
         elif hasattr(vector_store, "get"):
             try:
-                res = vector_store.get(where={"document_id": document_id})
+                where_filter: dict = {"document_id": document_id}
+                if owner_id and owner_id != "anonymous":
+                    where_filter = {"$and": [{"document_id": document_id}, {"owner_id": owner_id}]}
+                res = vector_store.get(where=where_filter)
                 for doc_text, meta in zip(
                     res.get("documents", []), res.get("metadatas", []), strict=False
                 ):

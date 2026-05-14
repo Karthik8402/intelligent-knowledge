@@ -23,7 +23,7 @@ from slowapi.util import get_remote_address  # noqa: E402
 
 from .api.v1.api import api_router  # noqa: E402
 from .config import get_settings  # noqa: E402
-from .dependencies import set_embeddings, set_vector_store  # noqa: E402
+from .dependencies import set_embeddings, set_init_error, set_vector_store  # noqa: E402
 from .exceptions import KnowledgeBaseError  # noqa: E402
 from .generation import get_embeddings  # noqa: E402
 from .retrieval import build_vector_store  # noqa: E402
@@ -82,11 +82,13 @@ async def lifespan(app: FastAPI):
         vs = build_vector_store(emb)
         set_embeddings(emb)
         set_vector_store(vs)
+        set_init_error(None)
         logger.info("Vector store (%s) initialized successfully", settings.vector_store)
     except Exception as e:
         logger.warning("Vector store disabled: %s", e)
         set_embeddings(None)
         set_vector_store(None)
+        set_init_error(e)
 
     yield  # app is running
 

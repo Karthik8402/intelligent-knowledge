@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { chat, chatStream } from '../../api';
 import type { ChatResponse, Citation } from '../../types';
 import ConfirmToast from '../../components/ui/ConfirmToast';
+import { useUsageStore } from '../../services/usage';
 
 /* ──────────────────────────────────────────────
    Types
@@ -19,7 +21,7 @@ type ChatSession = {
 /* ──────────────────────────────────────────────
    LocalStorage helpers
    ────────────────────────────────────────────── */
-const STORAGE_KEY = 'obsidian_chat_sessions';
+const STORAGE_KEY = 'qk_chat_sessions';
 
 function loadSessions(): ChatSession[] {
   try {
@@ -145,6 +147,8 @@ const suggestions = [
    Component
    ────────────────────────────────────────────── */
 export default function ChatPage() {
+  const [searchParams]                  = useSearchParams();
+  const docFilter                       = searchParams.get('doc');
   const [sessions, setSessions]         = useState<ChatSession[]>(loadSessions);
   const [activeId, setActiveId]         = useState<string | null>(null);
   const [input, setInput]               = useState('');
@@ -160,6 +164,8 @@ export default function ChatPage() {
   const inputRef    = useRef<HTMLTextAreaElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
   const scrollPositionsRef = useRef<Record<string, number>>({});
+  
+  const { data: usageData, fetchUsage, decrementRemaining } = useUsageStore();
 
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
   const messages = activeSession?.messages ?? [];
@@ -181,6 +187,10 @@ export default function ChatPage() {
     media.addListener(update);
     return () => media.removeListener(update);
   }, []);
+
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
 
   useEffect(() => {
     if (!isDesktop) {
@@ -254,6 +264,7 @@ export default function ChatPage() {
   }, [deleteSession, pendingSessionDelete]);
 
   const handleSend = async () => {
+    if (usageData && usageData.remaining <= 0) return;
     const q = input.trim();
     if (!q || loading) return;
     setInput('');
@@ -284,9 +295,12 @@ export default function ChatPage() {
     let streamedText = '';
     let streamCitations: Citation[] = [];
 
+    const documentIds = docFilter ? [docFilter] : undefined;
+
     try {
       await chatStream(
         q,
+        documentIds,
         // onToken: append token and update session in real-time
         (token) => {
           streamedText += token;
@@ -305,13 +319,15 @@ export default function ChatPage() {
           };
           updateSession(sessionId!, [...withUser, { role: 'assistant', text: streamedText, data: finalData }]);
           setLoading(false);
+          decrementRemaining();
         },
         // onError: fall back to standard chat
         async (error) => {
           console.warn('Stream failed, falling back to standard chat:', error);
           try {
-            const res = await chat(q);
+            const res = await chat(q, documentIds);
             updateSession(sessionId!, [...withUser, { role: 'assistant', text: res.answer, data: res }]);
+            decrementRemaining();
           } catch (e2: any) {
             updateSession(sessionId!, [...withUser, { role: 'assistant', text: `Error: ${e2.message}` }]);
           } finally {
@@ -322,8 +338,9 @@ export default function ChatPage() {
     } catch (e: any) {
       // Network-level failure — fall back to standard chat
       try {
-        const res = await chat(q);
+        const res = await chat(q, documentIds);
         updateSession(sessionId!, [...withUser, { role: 'assistant', text: res.answer, data: res }]);
+        decrementRemaining();
       } catch (e2: any) {
         updateSession(sessionId!, [...withUser, { role: 'assistant', text: `Error: ${e2.message}` }]);
       } finally {
@@ -362,6 +379,14 @@ export default function ChatPage() {
     if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
     if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
     return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const calculateResetTime = (resetDate: string) => {
+    const diffMs = new Date(resetDate).getTime() - Date.now();
+    if (diffMs <= 0) return 'soon';
+    const hours = Math.floor(diffMs / 3600_000);
+    const minutes = Math.floor((diffMs % 3600_000) / 60_000);
+    return `${hours}h ${minutes}m`;
   };
 
   /* ──────────────────────────────────────────── */
@@ -568,11 +593,28 @@ export default function ChatPage() {
                   <button
                     className="bg-primary text-on-primary-fixed p-2.5 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_rgba(181,196,255,0.4)] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
                     onClick={handleSend}
-                    disabled={loading || !input.trim()}
+                    disabled={loading || !input.trim() || (usageData ? usageData.remaining <= 0 : false)}
                   >
                     <span className="material-symbols-outlined text-lg">{loading ? 'hourglass_top' : 'arrow_upward'}</span>
                   </button>
                 </div>
+                {usageData && (
+                  <div className="flex justify-between items-center mt-2 mx-2">
+                    <p className={`text-[10px] font-bold ${usageData.remaining === 0 ? 'text-error' : usageData.remaining <= 5 ? 'text-error/80' : usageData.remaining <= 10 ? 'text-[var(--md-sys-color-tertiary)]' : 'text-primary/70'}`}>
+                      {usageData.remaining === 0 ? 'Daily limit reached' : usageData.remaining <= 5 ? 'Only a few requests left' : usageData.remaining <= 10 ? 'Approaching usage limit' : 'AI Usage'}
+                    </p>
+                    <div className="flex items-center gap-4 text-[10px] text-outline/60">
+                      <span>{usageData.remaining} / {usageData.limit} remaining</span>
+                      <span>Resets in: {calculateResetTime(usageData.reset_at)}</span>
+                      <span className="hidden sm:inline">Plan: {usageData.plan}</span>
+                    </div>
+                  </div>
+                )}
+                {usageData && usageData.remaining === 0 && (
+                  <p className="text-xs text-error mt-2 text-center bg-error/10 p-2 rounded-lg border border-error/20">
+                    You reached your daily AI limit. Please wait until the next reset.
+                  </p>
+                )}
                 <p className="text-[10px] text-outline/40 text-center mt-2 hidden sm:block">
                   Press Enter to send · Shift+Enter for new line · Responses are grounded in your uploaded documents
                 </p>
@@ -711,11 +753,28 @@ export default function ChatPage() {
                   <button
                     className="bg-primary text-on-primary-fixed p-2.5 rounded-xl transition-all duration-200 hover:shadow-[0_0_16px_rgba(181,196,255,0.4)] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
                     onClick={handleSend}
-                    disabled={loading || !input.trim()}
+                    disabled={loading || !input.trim() || (usageData ? usageData.remaining <= 0 : false)}
                   >
                     <span className="material-symbols-outlined text-lg">{loading ? 'hourglass_top' : 'arrow_upward'}</span>
                   </button>
                 </div>
+                {usageData && (
+                  <div className="flex justify-between items-center mt-2 mx-2">
+                    <p className={`text-[10px] font-bold ${usageData.remaining === 0 ? 'text-error' : usageData.remaining <= 5 ? 'text-error/80' : usageData.remaining <= 10 ? 'text-[var(--md-sys-color-tertiary)]' : 'text-primary/70'}`}>
+                      {usageData.remaining === 0 ? 'Daily limit reached' : usageData.remaining <= 5 ? 'Only a few requests left' : usageData.remaining <= 10 ? 'Approaching usage limit' : 'AI Usage'}
+                    </p>
+                    <div className="flex items-center gap-4 text-[10px] text-outline/60">
+                      <span>{usageData.remaining} / {usageData.limit} remaining</span>
+                      <span>Resets in: {calculateResetTime(usageData.reset_at)}</span>
+                      <span className="hidden sm:inline">Plan: {usageData.plan}</span>
+                    </div>
+                  </div>
+                )}
+                {usageData && usageData.remaining === 0 && (
+                  <p className="text-xs text-error mt-2 text-center bg-error/10 p-2 rounded-lg border border-error/20">
+                    You reached your daily AI limit. Please wait until the next reset.
+                  </p>
+                )}
                 <p className="text-[10px] text-outline/40 text-center mt-2 hidden sm:block">
                   Press Enter to send · Shift+Enter for new line · Responses are grounded in your uploaded documents
                 </p>

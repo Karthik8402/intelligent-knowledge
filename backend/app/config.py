@@ -9,17 +9,19 @@ class Settings(BaseSettings):
 
     # ── LLM / Embedding ──
     llm_provider: str = "google"
-    llm_model: str = "gemma-3-27b-it"
+    llm_model: str = "gemini-2.5-flash"
     llm_temperature: float = 0.2
     llm_top_p: float = 1.0
     llm_max_tokens: int | None = None
+    llm_timeout_seconds: float = 45.0
     google_api_key: str = ""
     openai_api_key: str = ""
     nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     groq_api_key: str = ""
 
-    embedding_provider: str = ""
-    embedding_model: str = ""
+    embedding_provider: str = "google"
+    embedding_model: str = "text-embedding-004"
 
     # ── Vector Store ──
     vector_store: str = "chroma"  # "chroma" | "pgvector"
@@ -43,9 +45,9 @@ class Settings(BaseSettings):
     auth_enabled: bool = False  # Set True in production
 
     # ── RAG ──
-    rag_top_k: int = 5
-    rag_chunk_size: int = 1000
-    rag_chunk_overlap: int = 200
+    rag_top_k: int = 6
+    rag_chunk_size: int = 800
+    rag_chunk_overlap: int = 150
 
     # ── Limits ──
     max_upload_size_mb: int = 25
@@ -53,6 +55,9 @@ class Settings(BaseSettings):
 
     # ── CORS ──
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://intelligent-knowledge.vercel.app/"
+
+    # ── Redis (optional caching) ──
+    redis_url: str = ""
 
 
 @lru_cache

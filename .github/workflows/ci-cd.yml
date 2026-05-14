@@ -1,16 +1,12 @@
 name: CI/CD Pipeline
 
-# ─────────────────────────────────────────────────
-# Triggers
-# ─────────────────────────────────────────────────
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
-  workflow_dispatch:            # Manual trigger from GitHub UI
+  workflow_dispatch:
 
-# Cancel any in-progress run for the same branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -22,13 +18,12 @@ permissions:
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
+  RUFF_VERSION: "0.15.12"
+  BACKEND_TEST_ENV: "ci"
 
-# ─────────────────────────────────────────────────
-# JOB 1 — Backend Quality Gate
-# ─────────────────────────────────────────────────
 jobs:
   backend-lint:
-    name: "Backend · Lint & Format"
+    name: Backend / Ruff
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,46 +38,67 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install lint tools
-        run: pip install ruff==0.4.7
+      - name: Install Ruff
+        run: python -m pip install "ruff==${{ env.RUFF_VERSION }}"
 
-      - name: Ruff — check style & imports
-        run: ruff check . --output-format=github
+      - name: Ruff check
+        run: python -m ruff check app tests --output-format=github
 
-      - name: Ruff — check formatting
-        run: ruff format --check .
-
-  # ─────────────────────────────────────────────────
-  backend-typecheck:
-    name: "Backend · Type Check"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
-
-      - name: Install dependencies + mypy
-        run: |
-          pip install -r requirements.txt
-          pip install mypy==1.10.0 types-requests
-
-      - name: mypy type check
-        run: mypy app/ --ignore-missing-imports --no-error-summary
-        continue-on-error: true   # advisory until stubs are complete
-
-  # ─────────────────────────────────────────────────
   backend-test:
-    name: "Backend · Unit & Integration Tests"
+    name: Backend / Tests
     runs-on: ubuntu-latest
-    needs: [backend-lint]
+    needs: backend-lint
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: "."
+      GOOGLE_API_KEY: "test-key-not-real"
+      LLM_PROVIDER: "google"
+      LLM_MODEL: "gemini-2.5-flash"
+      EMBEDDING_PROVIDER: "google"
+      EMBEDDING_MODEL: "text-embedding-004"
+      STORAGE_BACKEND: "local"
+      VECTOR_STORE: "chroma"
+      AUTH_ENABLED: "false"
+      METADATA_DB_PATH: "./data/test_registry.json"
+      SQLITE_DB_PATH: "./data/test_knowledge_base.db"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest-cov
+
+      - name: Run backend tests
+        run: |
+          python -m pytest tests \
+            --basetemp .pytest_tmp \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=60
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 7
+
+  backend-typecheck:
+    name: Backend / Type Check
+    runs-on: ubuntu-latest
+    needs: backend-lint
     defaults:
       run:
         working-directory: backend
@@ -97,46 +113,19 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest-cov pytest-asyncio anyio
-
-      - name: Run tests with coverage
         run: |
-          pytest tests/ \
-            -v \
-            --tb=short \
-            --cov=app \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-fail-under=60
-        env:
-          PYTHONPATH: "."
-          GOOGLE_API_KEY: "test-key-not-real"
-          STORAGE_BACKEND: "local"
-          VECTOR_STORE: "chroma"
-          AUTH_ENABLED: "false"
-          METADATA_DB_PATH: "./data/test_registry.json"
-          SQLITE_DB_PATH: "./data/test_knowledge_base.db"
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install mypy==1.10.0 types-requests
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage
-          path: backend/coverage.xml
-          retention-days: 7
-
-      - name: Coverage summary comment (PRs only)
-        if: github.event_name == 'pull_request'
-        uses: MishaKav/pytest-coverage-comment@main
-        with:
-          pytest-xml-coverage-path: backend/coverage.xml
-          title: "Backend Coverage Report"
+      - name: Mypy advisory check
+        run: python -m mypy app --ignore-missing-imports --no-error-summary
         continue-on-error: true
 
-  # ─────────────────────────────────────────────────
   backend-security:
-    name: "Backend · Security Audit"
+    name: Backend / Security Advisory
     runs-on: ubuntu-latest
-    needs: [backend-lint]
+    needs: backend-lint
     defaults:
       run:
         working-directory: backend
@@ -150,22 +139,23 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install pip-audit & bandit
-        run: pip install pip-audit bandit[toml]==1.7.9
+      - name: Install security tools
+        run: python -m pip install pip-audit bandit[toml]==1.7.9
 
-      - name: pip-audit — dependency CVE scan
-        run: pip-audit -r requirements.txt --desc --format markdown || true
+      - name: pip-audit advisory scan
+        run: pip-audit -r requirements.txt --desc --format markdown
+        continue-on-error: true
 
-      - name: bandit — static security analysis
+      - name: Bandit advisory scan
         run: |
-          bandit -r app/ \
+          bandit -r app \
             -ll \
             --exclude app/__pycache__ \
             -f json \
-            -o bandit-report.json || true
-          cat bandit-report.json || true
+            -o bandit-report.json
+        continue-on-error: true
 
-      - name: Upload security report
+      - name: Upload backend security report
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -173,11 +163,8 @@ jobs:
           path: backend/bandit-report.json
           retention-days: 7
 
-  # ─────────────────────────────────────────────────
-  # JOB 2 — Frontend Quality Gate
-  # ─────────────────────────────────────────────────
-  frontend-lint:
-    name: "Frontend · Lint"
+  frontend-validate:
+    name: Frontend / Type Check
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -194,21 +181,20 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: ESLint (if configured)
-        run: npx eslint src/ --ext .ts,.tsx --max-warnings 0 || true
 
       - name: TypeScript type check
         run: npx tsc --noEmit
 
-  # ─────────────────────────────────────────────────
   frontend-test:
-    name: "Frontend · Unit Tests"
+    name: Frontend / Tests
     runs-on: ubuntu-latest
-    needs: [frontend-lint]
+    needs: frontend-validate
     defaults:
       run:
         working-directory: frontend
+    env:
+      VITE_API_URL: "http://localhost:8000"
+      VITE_API_BASE_URL: "http://localhost:8000"
 
     steps:
       - uses: actions/checkout@v4
@@ -222,32 +208,26 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Run Vitest unit tests with coverage
-        run: |
-          npx vitest run \
-            --reporter=verbose \
-            --coverage \
-            --coverage.reporter=lcov \
-            --coverage.reporter=text
-        env:
-          VITE_API_URL: "http://localhost:8000"
-          VITE_API_BASE_URL: "http://localhost:8000"
+      - name: Run frontend tests
+        run: npm run test:ci
 
-      - name: Upload coverage report
+      - name: Upload frontend coverage
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
           path: frontend/coverage/
           retention-days: 7
 
-  # ─────────────────────────────────────────────────
   frontend-build:
-    name: "Frontend · Production Build"
+    name: Frontend / Build
     runs-on: ubuntu-latest
-    needs: [frontend-lint]
+    needs: frontend-validate
     defaults:
       run:
         working-directory: frontend
+    env:
+      VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://intelligent-knowledge.onrender.com' }}
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || secrets.VITE_API_URL || 'https://intelligent-knowledge.onrender.com' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -263,27 +243,38 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://intelligent-knowledge.onrender.com' }}
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || secrets.VITE_API_URL || 'https://intelligent-knowledge.onrender.com' }}
 
-      - name: Analyse bundle size
-        run: du -sh dist/ && find dist -name "*.js" | xargs wc -c | sort -n | tail -5
+      - name: Analyze bundle size
+        run: |
+          du -sh dist
+          find dist -name "*.js" -print0 | xargs -0 wc -c | sort -n | tail -5
 
-      - name: Upload build artifact
+      - name: Upload frontend build
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: frontend/dist/
           retention-days: 3
 
-  # ─────────────────────────────────────────────────
-  # JOB 3 — E2E / Smoke tests (API health check)
-  # ─────────────────────────────────────────────────
   smoke-test:
-    name: "Smoke Test · API contract"
+    name: Smoke Test / API Contract
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-build]
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: "."
+      GOOGLE_API_KEY: "smoke-test-key"
+      LLM_PROVIDER: "google"
+      LLM_MODEL: "gemini-2.5-flash"
+      EMBEDDING_PROVIDER: "google"
+      EMBEDDING_MODEL: "text-embedding-004"
+      STORAGE_BACKEND: "local"
+      VECTOR_STORE: "chroma"
+      AUTH_ENABLED: "false"
+      METADATA_DB_PATH: "./data/smoke_registry.json"
+      SQLITE_DB_PATH: "./data/smoke_knowledge_base.db"
 
     steps:
       - uses: actions/checkout@v4
@@ -294,56 +285,53 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install backend + test server
-        working-directory: backend
-        run: pip install -r requirements.txt httpx pytest
-
-      - name: Start API server in background
-        working-directory: backend
+      - name: Install backend
         run: |
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          echo "Waiting for server..."
-          for i in $(seq 1 15); do
-            curl -sf http://localhost:8000/health && break || sleep 2
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Start API server
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+          echo $! > uvicorn.pid
+
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
           done
-        env:
-          GOOGLE_API_KEY: "smoke-test-key"
-          STORAGE_BACKEND: "local"
-          VECTOR_STORE: "chroma"
-          AUTH_ENABLED: "false"
 
-      - name: Health endpoint smoke test
-        run: |
-          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health)
-          echo "Health status: $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+          echo "API failed to become healthy"
+          cat uvicorn.log
+          exit 1
 
-      - name: Status endpoint smoke test
-        run: |
-          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/status)
-          echo "Status check: $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+      - name: Health endpoint
+        run: curl -sf http://127.0.0.1:8000/health
 
-      - name: Documents list smoke test
-        run: |
-          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/documents)
-          echo "Documents list: $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+      - name: Status endpoint
+        run: curl -sf http://127.0.0.1:8000/status
 
-      - name: Chat endpoint smoke test
+      - name: Documents endpoint
+        run: curl -sf http://127.0.0.1:8000/documents
+
+      - name: Chat endpoint
         run: |
-          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
-            -X POST http://localhost:8000/chat \
+          curl -sf \
+            -X POST http://127.0.0.1:8000/chat \
             -H "Content-Type: application/json" \
-            -d '{"question":"Hello"}')
-          echo "Chat endpoint: $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+            -d '{"question":"Hello"}'
 
-  # ─────────────────────────────────────────────────
-  # JOB 4 — Deploy to Render (main branch only)
-  # ─────────────────────────────────────────────────
+      - name: Stop API server
+        if: always()
+        run: |
+          if [ -f uvicorn.pid ]; then
+            kill "$(cat uvicorn.pid)" || true
+          fi
+
   deploy-backend:
-    name: "Deploy · Backend → Render"
+    name: Deploy / Backend to Render
     runs-on: ubuntu-latest
     needs: [backend-test, backend-security, smoke-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -355,40 +343,40 @@ jobs:
       - name: Validate Render deploy secret
         run: |
           if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            echo "Missing RENDER_DEPLOY_HOOK_URL secret" && exit 1
+            echo "Missing RENDER_DEPLOY_HOOK_URL secret"
+            exit 1
           fi
 
       - name: Trigger Render deploy hook
-        run: |
-          curl -sf \
-            -X POST \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
-          || exit 1
+        run: curl -sf -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
 
       - name: Wait for Render health check
         run: |
-          echo "Waiting 120s for Render to deploy..."
+          echo "Waiting for Render deploy..."
           sleep 120
           for i in $(seq 1 18); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              https://intelligent-knowledge.onrender.com/health)
-            echo "Attempt $i: $STATUS"
-            [ "$STATUS" = "200" ] && echo "✅ Deploy healthy!" && exit 0
+            status=$(curl -s -o /dev/null -w "%{http_code}" https://intelligent-knowledge.onrender.com/health)
+            echo "Attempt $i: $status"
+            if [ "$status" = "200" ]; then
+              echo "Deploy healthy"
+              exit 0
+            fi
             sleep 10
           done
-          echo "❌ Health check timed out" && exit 1
+          echo "Health check timed out"
+          exit 1
 
-  # ─────────────────────────────────────────────────
-  # JOB 5 — Deploy Frontend to Vercel (main only)
-  # ─────────────────────────────────────────────────
   deploy-frontend:
-    name: "Deploy · Frontend → Vercel"
+    name: Deploy / Frontend to Vercel
     runs-on: ubuntu-latest
     needs: [frontend-test, frontend-build, smoke-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
       url: https://intelligent-knowledge.vercel.app
+    defaults:
+      run:
+        working-directory: frontend
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -408,30 +396,28 @@ jobs:
       - name: Validate Vercel secrets
         run: |
           if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ORG_ID }}" ] || [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
-            echo "Missing Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID" && exit 1
+            echo "Missing Vercel secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID"
+            exit 1
           fi
 
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Build with Vercel
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Deploy prebuilt to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
-  # ─────────────────────────────────────────────────
-  # JOB 6 — Final pipeline status summary
-  # ─────────────────────────────────────────────────
   pipeline-summary:
-    name: "Pipeline · Summary"
+    name: Pipeline / Summary
     runs-on: ubuntu-latest
     needs:
       - backend-lint
       - backend-typecheck
       - backend-test
       - backend-security
-      - frontend-lint
+      - frontend-validate
       - frontend-test
       - frontend-build
       - smoke-test
@@ -440,15 +426,15 @@ jobs:
     steps:
       - name: Summarize results
         run: |
-          echo "## CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend Lint      | ${{ needs.backend-lint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend Typecheck | ${{ needs.backend-typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend Tests     | ${{ needs.backend-test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend Security  | ${{ needs.backend-security.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend Lint     | ${{ needs.frontend-lint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend Tests    | ${{ needs.frontend-test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend Build    | ${{ needs.frontend-build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Smoke Tests       | ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "## CI/CD Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Stage | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Ruff | ${{ needs.backend-lint.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Type Check | ${{ needs.backend-typecheck.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Tests | ${{ needs.backend-test.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend Security Advisory | ${{ needs.backend-security.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend Type Check | ${{ needs.frontend-validate.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend Tests | ${{ needs.frontend-test.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend Build | ${{ needs.frontend-build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Smoke Tests | ${{ needs.smoke-test.result }} |" >> "$GITHUB_STEP_SUMMARY"

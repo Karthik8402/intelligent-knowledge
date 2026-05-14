@@ -18,14 +18,14 @@ class TestRetrieveChunks:
 
         doc = Document(page_content="chunk text", metadata={"document_id": "d1"})
         mock_store = MagicMock()
-        mock_store.similarity_search_with_relevance_scores.return_value = [(doc, 0.85)]
+        mock_store.max_marginal_relevance_search.return_value = [doc]
 
         results = retrieve_chunks(mock_store, "question?", top_k=5)
 
         assert len(results) == 1
-        assert results[0][1] == 0.85
-        mock_store.similarity_search_with_relevance_scores.assert_called_once_with(
-            query="question?", k=5, filter=None
+        assert results[0][1] == 1.0
+        mock_store.max_marginal_relevance_search.assert_called_once_with(
+            query="question?", k=5, fetch_k=15, filter=None
         )
 
     @patch("app.retrieval.get_settings")
@@ -35,11 +35,11 @@ class TestRetrieveChunks:
         mock_settings.return_value = MagicMock(vector_store="chroma")
 
         mock_store = MagicMock()
-        mock_store.similarity_search_with_relevance_scores.return_value = []
+        mock_store.max_marginal_relevance_search.return_value = []
 
         retrieve_chunks(mock_store, "q?", top_k=3, document_ids=["d1", "d2"])
 
-        call_kwargs = mock_store.similarity_search_with_relevance_scores.call_args
+        call_kwargs = mock_store.max_marginal_relevance_search.call_args
         assert call_kwargs.kwargs["filter"] == {"document_id": {"$in": ["d1", "d2"]}}
 
     @patch("app.retrieval.get_settings")

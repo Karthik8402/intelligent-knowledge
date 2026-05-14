@@ -125,9 +125,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authEnabled) {
       return;
     }
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Sign out error:', e);
+    }
+    // ── Secure session cleanup ──
     clearApiCache();
+    localStorage.clear();
+    sessionStorage.clear();
+    // Reset auth state immediately
+    setState({ user: null, session: null, loading: false });
   }, []);
 
   const resetPasswordForEmail = useCallback(async (email: string) => {

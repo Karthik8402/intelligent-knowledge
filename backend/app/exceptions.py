@@ -15,7 +15,7 @@ class KnowledgeBaseError(Exception):
 class VectorStoreNotInitializedError(KnowledgeBaseError):
     """Raised when the vector store is not available."""
 
-    def __init__(self, message: str = "Vector store not initialized. Check API keys.") -> None:
+    def __init__(self, message: str = "Vector store not initialized.") -> None:
         super().__init__(message, status_code=503)
 
 

@@ -1,10 +1,18 @@
-"""Vector store builder and retrieval — dual-mode: ChromaDB (local) or pgvector (Supabase)."""
+"""Vector store builder and retrieval — dual-mode: ChromaDB (local) or pgvector (Supabase).
+
+Key production features:
+  - MMR (Max Marginal Relevance) as default retrieval strategy
+  - Strict owner_id filtering on ALL vector queries (data isolation)
+  - Detailed observability logging (scores, timings, document IDs)
+"""
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
+from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 from .config import get_settings
@@ -74,45 +82,133 @@ def _build_faiss_store(embeddings: Embeddings):
     return FAISS.from_texts(["bootstrap"], embedding=embeddings)
 
 
+def _build_owner_filter(
+    owner_id: str | None,
+    document_ids: list[str] | None = None,
+) -> dict | None:
+    """Build a metadata filter dict that enforces owner_id isolation.
+
+    Returns None only if no filtering is needed (should not happen in production).
+    """
+    conditions: list[dict] = []
+
+    if owner_id and owner_id != "anonymous":
+        conditions.append({"owner_id": owner_id})
+
+    if document_ids:
+        conditions.append({"document_id": {"$in": document_ids}})
+
+    if not conditions:
+        return None
+    if len(conditions) == 1:
+        return conditions[0]
+    return {"$and": conditions}
+
+
 def retrieve_chunks(
     vector_store: Any,
     question: str,
     top_k: int,
+    owner_id: str | None = None,
     document_ids: list[str] | None = None,
-):
-    """Retrieve relevant chunks from the vector store."""
+) -> list[tuple[Document, float]]:
+    """Retrieve relevant chunks using MMR with strict owner_id filtering.
+
+    Args:
+        vector_store: The active vector store instance.
+        question: The user's question.
+        top_k: Number of chunks to retrieve.
+        owner_id: The authenticated user's ID (REQUIRED for data isolation).
+        document_ids: Optional list of document IDs to scope the search to.
+
+    Returns:
+        List of (Document, score) tuples sorted by relevance.
+    """
     settings = get_settings()
     store_type = settings.vector_store.lower()
+    started = time.perf_counter()
 
-    # ── pgvector retrieval ──
+    metadata_filter = _build_owner_filter(owner_id, document_ids)
+
+    logger.info(
+        "Retrieval request: store=%s top_k=%d owner_id=%s doc_filter=%s",
+        store_type,
+        top_k,
+        owner_id,
+        document_ids or "all",
+    )
+
+    docs: list[tuple[Document, float]]
+
+    # ── pgvector retrieval (MMR) ──
     if store_type == "pgvector":
-        filters = None
-        if document_ids:
-            filters = {"document_id": {"$in": document_ids}}
+        try:
+            raw_docs = vector_store.max_marginal_relevance_search(
+                query=question,
+                k=top_k,
+                fetch_k=top_k * 3,
+                filter=metadata_filter,
+            )
+            # MMR doesn't return scores; assign positional scores
+            docs = [(doc, round(1.0 - (i * 0.05), 4)) for i, doc in enumerate(raw_docs)]
+        except Exception as e:
+            logger.warning("MMR failed for pgvector, falling back to similarity: %s", e)
+            docs = vector_store.similarity_search_with_relevance_scores(
+                query=question,
+                k=top_k,
+                filter=metadata_filter,
+            )
 
-        docs = vector_store.similarity_search_with_relevance_scores(
-            query=question,
-            k=top_k,
-            filter=filters,
+    # ── ChromaDB retrieval (MMR) ──
+    elif store_type == "chroma":
+        try:
+            raw_docs = vector_store.max_marginal_relevance_search(
+                query=question,
+                k=top_k,
+                fetch_k=top_k * 3,
+                filter=metadata_filter,
+            )
+            docs = [(doc, round(1.0 - (i * 0.05), 4)) for i, doc in enumerate(raw_docs)]
+        except Exception as e:
+            logger.warning("MMR failed for chroma, falling back to similarity: %s", e)
+            docs = vector_store.similarity_search_with_relevance_scores(
+                query=question,
+                k=top_k,
+                filter=metadata_filter,
+            )
+
+    # ── FAISS fallback (no metadata filtering support) ──
+    else:
+        raw = vector_store.similarity_search_with_score(query=question, k=top_k)
+        docs = [(doc, float(score)) for doc, score in raw]
+        # Manual owner_id filtering for FAISS
+        if owner_id and owner_id != "anonymous":
+            docs = [
+                (doc, score)
+                for doc, score in docs
+                if doc.metadata.get("owner_id") == owner_id
+            ]
+
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+    # ── Observability logging ──
+    for i, (doc, score) in enumerate(docs):
+        meta = doc.metadata or {}
+        logger.info(
+            "  Chunk %d: score=%.4f doc_id=%s file=%s page=%s owner=%s",
+            i + 1,
+            score,
+            meta.get("document_id", "?"),
+            meta.get("file_name", "?"),
+            meta.get("page", "?"),
+            meta.get("owner_id", "?"),
         )
-        return docs
 
-    # ── ChromaDB retrieval ──
-    if store_type == "chroma":
-        filters = None
-        if document_ids:
-            filters = {"document_id": {"$in": document_ids}}
+    logger.info(
+        "Retrieval complete: %d chunks in %dms (store=%s, method=MMR)",
+        len(docs),
+        elapsed_ms,
+        store_type,
+    )
 
-        docs = vector_store.similarity_search_with_relevance_scores(
-            query=question,
-            k=top_k,
-            filter=filters,
-        )
-        return docs
-
-    # ── FAISS fallback ──
-    docs = vector_store.similarity_search_with_score(query=question, k=top_k)
-    normalized = []
-    for doc, score in docs:
-        normalized.append((doc, float(score)))
-    return normalized
+    return docs

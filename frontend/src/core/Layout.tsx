@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { listDocuments } from '../api';
 import type { DocumentMetadata } from '../types';
 import ToastContainer from '../shared/Toast';
 import { useAuth } from '../hooks/useAuth';
 import { authEnabled } from '../lib/supabase';
+import { BRAND } from '../config/branding';
 
 export default function Layout() {
   const { loading, user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [pageKey, setPageKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const fetchDocs = useCallback(async () => {
     try {
@@ -33,7 +37,25 @@ export default function Layout() {
     setPageKey((k) => k + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     setSidebarOpen(false);
+    setUserMenuOpen(false);
   }, [fetchDocs, loading, location.pathname, user?.id]);
+
+  /* ── Close user menu on outside click ── */
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSignOut = async () => {
+    setUserMenuOpen(false);
+    await signOut();
+    navigate('/login');
+  };
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-6 py-3 transition-all duration-300 ease-out-expo relative overflow-hidden group ${
@@ -43,6 +65,7 @@ export default function Layout() {
     }`;
 
   const navItems = [
+    { to: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
     { to: '/documents', icon: 'folder_open', label: 'Documents' },
     { to: '/chat', icon: 'chat', label: 'Knowledge Chat' },
     { to: '/chunks', icon: 'segment', label: 'Chunks' },
@@ -50,9 +73,18 @@ export default function Layout() {
     { to: '/settings', icon: 'settings', label: 'Settings' },
   ];
 
+  const PAGE_TITLES: Record<string, string> = {
+    '/dashboard': 'Dashboard',
+    '/documents': 'Documents',
+    '/chat': 'Knowledge Chat',
+    '/chunks': 'Chunks Explorer',
+    '/status': 'System Status',
+    '/settings': 'Settings',
+    '/profile': 'Profile',
+  };
+
   const isChat = location.pathname === '/chat';
-  const profileName = user?.user_metadata?.full_name || user?.email || 'User';
-  const profileMeta = user?.user_metadata?.timezone || user?.email || 'Authenticated';
+  const profileName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
   const profileInitials = profileName
     .split(' ')
     .filter(Boolean)
@@ -80,12 +112,12 @@ export default function Layout() {
         lg:translate-x-0
       `}>
         <div className="px-6 py-8 flex items-center justify-between">
-          <div>
-            <h1 className="font-['Space_Grotesk'] font-bold text-[#b5c4ff] tracking-tighter text-2xl animate-fade-in-down">
-              OBSIDIAN.AI
+          <NavLink to="/dashboard" className="group">
+            <h1 className="font-['Space_Grotesk'] font-bold text-[#b5c4ff] tracking-tighter text-2xl animate-fade-in-down group-hover:opacity-80 transition-opacity">
+              {BRAND.name}
             </h1>
             <div className="h-[2px] w-12 bg-gradient-to-r from-primary to-secondary mt-2 rounded-full" />
-          </div>
+          </NavLink>
           {/* Close button — mobile only */}
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 hover:bg-surface-container rounded-xl transition-colors">
             <span className="material-symbols-outlined text-outline">close</span>
@@ -127,19 +159,45 @@ export default function Layout() {
           </div>
         </nav>
 
-        <div className="p-4 mt-auto border-t border-outline-variant/10">
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container transition-all duration-300 cursor-pointer group" onClick={() => !user && (window.location.href='/login')}>
+        {/* ── User Menu (bottom of sidebar) ── */}
+        <div className="p-4 mt-auto border-t border-outline-variant/10 relative" ref={userMenuRef}>
+          {/* User dropdown menu */}
+          {userMenuOpen && user && (
+            <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#1c2026] border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden animate-fade-in-up z-50">
+              <div className="px-4 py-3 border-b border-outline-variant/10">
+                <p className="text-sm font-bold text-on-surface truncate">{profileName}</p>
+                <p className="text-[11px] text-outline truncate">{user.email}</p>
+              </div>
+              <NavLink to="/profile" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+                <span className="material-symbols-outlined text-base">person</span>
+                My Profile
+              </NavLink>
+              <NavLink to="/settings" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+                <span className="material-symbols-outlined text-base">settings</span>
+                Settings
+              </NavLink>
+              <button onClick={handleSignOut} className="flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors w-full text-left">
+                <span className="material-symbols-outlined text-base">logout</span>
+                Sign Out
+              </button>
+            </div>
+          )}
+
+          <div
+            className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container transition-all duration-300 cursor-pointer group"
+            onClick={() => user ? setUserMenuOpen(!userMenuOpen) : navigate('/login')}
+          >
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-on-primary-container font-black text-xs transition-transform duration-300 group-hover:scale-110 animate-gradient-shift" style={{ backgroundSize: '200% 200%' }}>
               {user ? profileInitials : 'GU'}
             </div>
             <div className="flex-grow overflow-hidden">
               <p className="text-xs font-bold text-on-surface truncate tracking-tight">{user ? profileName : 'Guest User'}</p>
-              <p className="text-[10px] text-outline truncate">{user ? profileMeta : 'Click to Sign In'}</p>
+              <p className="text-[10px] text-outline truncate">{user ? 'Authenticated' : 'Click to Sign In'}</p>
             </div>
             {user && (
-              <button onClick={(e) => { e.stopPropagation(); signOut(); }} className="ml-auto p-1 hover:text-white text-outline transition-colors" title="Sign Out">
-                <span className="material-symbols-outlined text-sm">logout</span>
-              </button>
+              <span className="material-symbols-outlined text-sm text-outline group-hover:text-on-surface transition-colors">
+                {userMenuOpen ? 'expand_more' : 'expand_less'}
+              </span>
             )}
           </div>
         </div>
@@ -162,11 +220,7 @@ export default function Layout() {
               <span className="material-symbols-outlined text-outline">menu</span>
             </button>
             <h2 className="font-['Space_Grotesk'] font-medium text-base sm:text-lg text-[#b5c4ff]">
-              {location.pathname === '/documents' ? 'Document Manager' : 
-               location.pathname === '/chat' ? 'Knowledge Chat' :
-               location.pathname === '/chunks' ? 'Vector Shards' :
-               location.pathname === '/status' ? 'System Telemetry' :
-               location.pathname === '/settings' ? 'Engine Settings' : 'Control Panel'}
+              {PAGE_TITLES[location.pathname] || 'Quick Knowledge'}
             </h2>
           </div>
           <div className="flex items-center gap-2">

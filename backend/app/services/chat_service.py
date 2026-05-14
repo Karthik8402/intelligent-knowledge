@@ -32,7 +32,13 @@ class ChatService:
         return False
 
     @staticmethod
-    def build_chat_response(question: str, vector_store: Any, reg, owner_id: str) -> ChatResponse:
+    def build_chat_response(
+        question: str,
+        vector_store: Any,
+        reg,
+        owner_id: str,
+        document_ids: list[str] | None = None,
+    ) -> ChatResponse:
         """Core chat logic shared by standard endpoint."""
         if not reg.list_documents(owner_id=owner_id) or vector_store is None:
             logger.info("Chat fallback: no documents or vector store unavailable")
@@ -49,6 +55,8 @@ class ChatService:
             vector_store=vector_store,
             question=question,
             top_k=settings.rag_top_k,
+            owner_id=owner_id,
+            document_ids=document_ids,
         )
 
         if not retrieved:
@@ -114,7 +122,13 @@ class ChatService:
         return ChatResponse(answer=answer, citations=citations, retrieved_chunks=retrieved_chunks)
 
     @staticmethod
-    async def chat_stream_generator(question: str, vector_store: Any, reg, owner_id: str):
+    async def chat_stream_generator(
+        question: str,
+        vector_store: Any,
+        reg,
+        owner_id: str,
+        document_ids: list[str] | None = None,
+    ):
         if not reg.list_documents(owner_id=owner_id) or vector_store is None:
             fallback = (
                 FALLBACK_ANSWER
@@ -131,6 +145,8 @@ class ChatService:
             vector_store=vector_store,
             question=question,
             top_k=settings.rag_top_k,
+            owner_id=owner_id,
+            document_ids=document_ids,
         )
 
         if not retrieved:

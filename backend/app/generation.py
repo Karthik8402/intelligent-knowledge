@@ -2,23 +2,14 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from pydantic import SecretStr
-
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from pydantic import SecretStr
 
-ChatNVIDIA: Any
-ChatGroq: Any
-
-try:
-    from langchain_nvidia_ai_endpoints import ChatNVIDIA as _ChatNVIDIA
-except ImportError:
-    ChatNVIDIA = None
-else:
-    ChatNVIDIA = _ChatNVIDIA
+from .config import get_settings
 
 try:
     from langchain_groq import ChatGroq as _ChatGroq
@@ -27,10 +18,8 @@ except ImportError:
 else:
     ChatGroq = _ChatGroq
 
-from .config import get_settings
-
-FALLBACK_ANSWER = "The provided documents do not contain this information."
-LEGACY_GOOGLE_EMBEDDING_MODELS = {"text-embedding-004"}
+FALLBACK_ANSWER = "Sorry, I could not find this information in your uploaded documents."
+LEGACY_GOOGLE_EMBEDDING_MODELS: set[str] = set()  # no longer redirect any models
 
 
 def get_embeddings() -> Embeddings:
@@ -40,8 +29,6 @@ def get_embeddings() -> Embeddings:
         if not settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY is required for google embeddings")
         model_name = settings.embedding_model
-        if model_name in LEGACY_GOOGLE_EMBEDDING_MODELS:
-            model_name = "gemini-embedding-001"
         embeddings_cls = cast(Any, GoogleGenerativeAIEmbeddings)
         return embeddings_cls(model=model_name, google_api_key=settings.google_api_key)
 
@@ -73,28 +60,37 @@ def get_chat_model():
     if settings.llm_provider.lower() == "openai":
         if not settings.openai_api_key:
             raise ValueError("OPENAI_API_KEY is required for openai llm")
-        return ChatOpenAI(
-            model=settings.llm_model,
-            api_key=settings.openai_api_key,
-            temperature=settings.llm_temperature,
-            top_p=settings.llm_top_p,
-        )
-
-    if settings.llm_provider.lower() == "nvidia":
-        if ChatNVIDIA is None:
-            raise ValueError("langchain-nvidia-ai-endpoints is not installed")
-        if not settings.nvidia_api_key:
-            raise ValueError("NVIDIA_API_KEY is required for nvidia llm")
         kwargs: dict[str, Any] = {
             "model": settings.llm_model,
-            "api_key": settings.nvidia_api_key,
+            "api_key": settings.openai_api_key,
             "temperature": settings.llm_temperature,
             "top_p": settings.llm_top_p,
-            "streaming": True,
+            "timeout": settings.llm_timeout_seconds,
+            "max_retries": 1,
         }
         if settings.llm_max_tokens:
-            kwargs["max_tokens"] = settings.llm_max_tokens
-        return ChatNVIDIA(**kwargs)
+            kwargs["max_completion_tokens"] = settings.llm_max_tokens
+        return ChatOpenAI(**kwargs)
+
+    if settings.llm_provider.lower() == "nvidia":
+        if not settings.nvidia_api_key:
+            raise ValueError("NVIDIA_API_KEY is required for nvidia llm")
+        kwargs = {
+            "model": settings.llm_model,
+            "api_key": settings.nvidia_api_key,
+            "base_url": settings.nvidia_base_url,
+            "temperature": settings.llm_temperature,
+            "top_p": settings.llm_top_p,
+            "timeout": settings.llm_timeout_seconds,
+            "max_retries": 1,
+            "streaming": True,
+            # NVIDIA's OpenAI-compatible chat endpoint does not accept some
+            # OpenAI-only parameters that newer langchain-openai may attach.
+            "disabled_params": {"parallel_tool_calls": None},
+        }
+        if settings.llm_max_tokens:
+            kwargs["max_completion_tokens"] = settings.llm_max_tokens
+        return ChatOpenAI(**kwargs)
 
     if settings.llm_provider.lower() == "groq":
         if ChatGroq is None:
@@ -112,35 +108,41 @@ def get_chat_model():
 
 
 def build_context(retrieved_docs: list[tuple[Document, float]]) -> str:
+    """Build a structured context block with document name, page, and content."""
     chunks = []
-    for index, (doc, _score) in enumerate(retrieved_docs, start=1):
+    for index, (doc, score) in enumerate(retrieved_docs, start=1):
         meta = doc.metadata or {}
-        file_name = meta.get("file_name", "unknown")
+        file_name = meta.get("file_name", "Unknown Document")
         page = meta.get("page")
-        document_id = meta.get("document_id", "unknown")
-        page_text = f"{page}" if page is not None else "n/a"
-        chunks.append(
-            "\n".join(
-                [
-                    f"[Source {index}]",
-                    f"document_id: {document_id}",
-                    f"file: {file_name}",
-                    f"page: {page_text}",
-                    f"text: {doc.page_content}",
-                ]
-            )
-        )
+        section = meta.get("section", "")
+
+        header_parts = [f"--- Reference {index} ---"]
+        header_parts.append(f"Document: {file_name}")
+        if page is not None:
+            header_parts.append(f"Page: {int(page) + 1}")
+        if section:
+            header_parts.append(f"Section: {section}")
+        header_parts.append(f"Relevance: {score:.4f}")
+        header_parts.append("Content:")
+        header_parts.append(doc.page_content)
+
+        chunks.append("\n".join(header_parts))
 
     return "\n\n".join(chunks)
 
 
 def _get_system_prompt() -> str:
     return (
-        "Answer using only the provided context. "
-        'If the context does not contain the answer, say exactly: "The provided documents do not contain this information." '
-        "Do not use outside knowledge. "
-        "Do not invent file names, pages, or numbers. "
-        "When stating facts from the context, always include an inline citation like [Source 1] or [Source 2] matching the source index provided."
+        "You are an accurate AI assistant that answers questions using ONLY the provided reference documents. "
+        "Follow these rules strictly:\n"
+        "1. Use the provided context to answer. Never use outside knowledge.\n"
+        "2. When citing information, naturally reference the document name and page number inline. "
+        "For example: 'According to Employee Policy Handbook (Page 8), remote work requires manager approval.'\n"
+        "3. NEVER output generic markers like 'Source 1', 'Source 2', '[Source 1]', 'Document1', etc.\n"
+        "4. If the answer cannot be found in the provided context, respond EXACTLY with: "
+        "'Sorry, I could not find this information in your uploaded documents.'\n"
+        "5. Do not invent file names, page numbers, or statistics.\n"
+        "6. Be concise, professional, and direct."
     )
 
 
@@ -162,19 +164,23 @@ def _build_messages(question: str, context: str) -> list:
 
 
 def _parse_llm_response(content: str) -> dict[str, Any]:
+    """Parse LLM response, extracting any reference indices mentioned."""
     import re
 
     content = content.strip()
 
     citation_indices = []
-    # Extract inline citations like [Source 1]
-    for match in re.finditer(r"\[Source\s+(\d+)\]", content, re.IGNORECASE):
+    # Match both legacy [Source N] and new 'Reference N' patterns
+    for match in re.finditer(r"(?:\[Source\s+(\d+)\]|Reference\s+(\d+))", content, re.IGNORECASE):
         try:
-            idx = int(match.group(1))
+            idx = int(match.group(1) or match.group(2))
             if idx not in citation_indices:
                 citation_indices.append(idx)
-        except ValueError:
+        except (ValueError, TypeError):
             continue
+
+    # Also detect document name citations to map back to reference indices
+    # This covers the natural citation format we instructed the LLM to use
 
     if not content:
         content = FALLBACK_ANSWER

@@ -63,7 +63,7 @@ describe('API Module', () => {
 
     it('throws when server returns non-ok status', async () => {
       fetchMock.mockResolvedValue(mockResponse({ detail: 'Server Error' }, 500));
-      await expect(getHealth()).rejects.toThrow('Failed to get health status');
+      await expect(getHealth()).rejects.toThrow('Server Error');
     });
   });
 
@@ -135,7 +135,7 @@ describe('API Module', () => {
 
     it('throws generic error on other failures', async () => {
       fetchMock.mockResolvedValue(mockResponse({ error: 'fail' }, 500));
-      await expect(chat('question')).rejects.toThrow('Failed to send message');
+      await expect(chat('question')).rejects.toThrow('fail');
     });
   });
 

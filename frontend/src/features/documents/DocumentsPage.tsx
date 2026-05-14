@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { deleteDocument, getDocumentChunks, listDocuments, uploadDocuments } from '../../api';
 import type { DocumentMetadata, RawChunk } from '../../types';
 import ConfirmToast from '../../components/ui/ConfirmToast';
@@ -21,8 +22,9 @@ export default function DocumentsPage() {
     setLoading(true);
     try {
       setDocs(await listDocuments());
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      showToast('error', 'Failed to load documents', e.message);
     } finally {
       setLoading(false);
     }
@@ -87,8 +89,9 @@ export default function DocumentsPage() {
     try {
       const res = await getDocumentChunks(docId);
       setChunks(res.chunks);
-    } catch {
+    } catch (e: any) {
       setChunks([]);
+      showToast('error', 'Retrieval Failed', e.message);
     } finally {
       setChunksLoading(false);
     }
@@ -256,11 +259,19 @@ export default function DocumentsPage() {
                     <span className="text-tertiary font-bold text-sm">{doc.chunks}</span>
                     <span className="text-[10px] text-outline ml-1 mt-0.5">chunks</span>
                   </div>
-                  <div className="hidden sm:flex sm:col-span-2 justify-end">
+                  <div className="hidden sm:flex sm:col-span-2 justify-end gap-2">
+                    <Link
+                      to={`/chat?doc=${doc.document_id}`}
+                      className="text-primary hover:text-primary-light p-2 rounded-lg hover:bg-primary/10 transition-all duration-200 active:scale-90"
+                      title="Chat with Document"
+                    >
+                      <span className="material-symbols-outlined text-sm">chat</span>
+                    </Link>
                     <button
                       onClick={(e) => { e.stopPropagation(); requestDelete(doc.document_id, doc.file_name); }}
                       disabled={deletingId === doc.document_id}
                       className="text-error hover:text-red-400 p-2 rounded-lg hover:bg-error/10 transition-all duration-200 active:scale-90"
+                      title="Delete Document"
                     >
                       <span className="material-symbols-outlined text-sm">
                         {deletingId === doc.document_id ? 'progress_activity' : 'delete'}
@@ -269,8 +280,14 @@ export default function DocumentsPage() {
                   </div>
                 </div>
 
-                {/* Mobile delete button */}
-                <div className="sm:hidden px-4 pb-3 flex justify-end">
+                {/* Mobile actions */}
+                <div className="sm:hidden px-4 pb-3 flex justify-end gap-2">
+                  <Link
+                    to={`/chat?doc=${doc.document_id}`}
+                    className="text-[10px] text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-all"
+                  >
+                    Chat
+                  </Link>
                   <button
                     onClick={() => requestDelete(doc.document_id, doc.file_name)}
                     disabled={deletingId === doc.document_id}

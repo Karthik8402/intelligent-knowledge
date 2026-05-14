@@ -16,6 +16,8 @@ langchain-huggingface>=0.1.2
 langchain-groq>=0.2.1
 langchain-postgres>=0.0.12
 langgraph>=0.4.0
+sentence-transformers>=3.0.0
+transformers>=4.40.0
 
 # ── Vector & Database ──
 psycopg[binary,pool]>=3.2.0

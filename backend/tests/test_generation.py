@@ -13,7 +13,7 @@ class TestBuildContext:
 
         doc = make_document(text="hello world", document_id="d1", file_name="a.pdf", page=0)
         result = build_context([(doc, 0.9)])
-        assert "[Source 1]" in result
+        assert "Reference 1" in result
         assert "hello world" in result
         assert "a.pdf" in result
 
@@ -25,8 +25,8 @@ class TestBuildContext:
             (make_document(text="second", document_id="d2"), 0.8),
         ]
         result = build_context(docs)
-        assert "[Source 1]" in result
-        assert "[Source 2]" in result
+        assert "Reference 1" in result
+        assert "Reference 2" in result
         assert "first" in result
         assert "second" in result
 
@@ -35,7 +35,7 @@ class TestBuildContext:
 
         doc = make_document(text="text", page=None)
         result = build_context([(doc, 0.5)])
-        assert "n/a" in result
+        assert "Page:" not in result
 
 
 class TestParseResponse:
@@ -97,6 +97,32 @@ class TestBuildMessages:
             )
             messages = _build_messages("What is AI?", "context here")
             assert len(messages) == 1  # Single HumanMessage for Gemma
+
+
+class TestGetChatModel:
+    @patch("app.generation.ChatOpenAI")
+    @patch("app.generation.get_settings")
+    def test_nvidia_uses_openai_compatible_client(self, mock_settings, mock_chat_openai):
+        from app.generation import get_chat_model
+
+        mock_settings.return_value = MagicMock(
+            llm_provider="nvidia",
+            llm_model="minimaxai/minimax-m2.7",
+            nvidia_api_key="test-key",
+            nvidia_base_url="https://integrate.api.nvidia.com/v1",
+            llm_temperature=0.0,
+            llm_top_p=1.0,
+            llm_timeout_seconds=45.0,
+            llm_max_tokens=500,
+        )
+
+        get_chat_model()
+
+        mock_chat_openai.assert_called_once()
+        kwargs = mock_chat_openai.call_args.kwargs
+        assert kwargs["base_url"] == "https://integrate.api.nvidia.com/v1"
+        assert kwargs["timeout"] == 45.0
+        assert kwargs["streaming"] is True
 
 
 class TestAnswerWithCitations:

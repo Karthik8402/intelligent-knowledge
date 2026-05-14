@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
+import { ArrowLeft, ArrowRight, CheckCircle2, KeyRound, MailCheck, ShieldCheck, Zap } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/Card';
-import toast from 'react-hot-toast';
-import { motion } from 'framer-motion';
-import { KeyRound, ArrowLeft } from 'lucide-react';
+import { BRAND } from '../../config/branding';
 
 export default function ForgotPasswordPage() {
   const { resetPasswordForEmail } = useAuth();
@@ -30,67 +30,123 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] p-4 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none" />
+    <div className="min-h-screen bg-background text-on-surface">
+      <header className="border-b border-outline-variant/20 bg-[#10141a]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
+              <Zap className="h-5 w-5 text-primary" />
+            </div>
+            <span className="truncate font-headline text-lg font-bold tracking-tight">{BRAND.name}</span>
+          </Link>
+          <Link to="/login">
+            <Button variant="outline" size="sm">Sign in</Button>
+          </Link>
+        </div>
+      </header>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-md relative z-10"
-      >
-        <Card className="border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl shadow-2xl">
-          <CardHeader className="space-y-2 text-center pb-6">
-            <div className="flex justify-center mb-4">
-              <div className="p-3 bg-indigo-500/10 rounded-2xl ring-1 ring-indigo-500/20">
-                <KeyRound className="w-6 h-6 text-indigo-400" />
+      <main className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 px-4 py-8 sm:px-6 lg:grid-cols-2 lg:px-8 lg:py-12">
+        <section className="hidden lg:block">
+          <div className="max-w-md">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
+              <KeyRound className="h-4 w-4" />
+              Password recovery
+            </div>
+            <h1 className="font-headline text-4xl font-bold leading-tight tracking-tight">
+              Get back into your knowledge workspace.
+            </h1>
+            <p className="mt-4 text-base leading-7 text-on-surface-variant">
+              Enter the email tied to your account. If it exists, we will send a secure reset link for creating a new password.
+            </p>
+            <div className="mt-8 space-y-4">
+              {['Reset links are sent by email', 'Existing documents stay untouched', 'You can sign in again after updating'].map((item) => (
+                <div key={item} className="flex items-center gap-3 text-sm text-on-surface-variant">
+                  <CheckCircle2 className="h-4 w-4 text-[#7dd3a8]" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="flex justify-center lg:justify-end">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="w-full max-w-md"
+          >
+            <div className="rounded-lg border border-outline-variant/20 bg-surface-container-low p-5 shadow-2xl shadow-black/25 sm:p-6">
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-headline text-2xl font-bold tracking-tight">
+                    {submitted ? 'Check your inbox' : 'Reset password'}
+                  </h2>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    {submitted ? 'We sent instructions if the account exists.' : 'Send a secure reset link to your email.'}
+                  </p>
+                </div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
+                  {submitted ? <MailCheck className="h-5 w-5 text-primary" /> : <KeyRound className="h-5 w-5 text-primary" />}
+                </div>
+              </div>
+
+              {submitted ? (
+                <div>
+                  <div className="rounded-md border border-outline-variant/20 bg-background p-4 text-sm leading-6 text-on-surface-variant">
+                    If an account exists with <span className="font-semibold text-on-surface">{email}</span>, a password reset link will arrive shortly.
+                  </div>
+                  <div className="mt-6 flex flex-col gap-3">
+                    <Link to="/login">
+                      <Button className="w-full gap-2">
+                        Back to sign in
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setSubmitted(false)}
+                      className="text-sm font-medium text-outline transition-colors hover:text-on-surface"
+                    >
+                      Use a different email
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    disabled={loading}
+                  />
+
+                  <Button type="submit" className="w-full gap-2" isLoading={loading}>
+                    Send reset link
+                    {!loading && <ArrowRight className="h-4 w-4" />}
+                  </Button>
+
+                  <Link to="/login" className="flex items-center justify-center gap-2 text-sm font-medium text-outline transition-colors hover:text-on-surface">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to sign in
+                  </Link>
+                </form>
+              )}
+
+              <div className="mt-6 rounded-md border border-outline-variant/20 bg-background p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-outline">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  Password changes happen through the secure auth session.
+                </div>
               </div>
             </div>
-            <CardTitle className="text-2xl font-bold tracking-tight text-zinc-100">Reset Password</CardTitle>
-            <CardDescription className="text-zinc-400">
-              Enter your email and we'll send you a reset link
-            </CardDescription>
-          </CardHeader>
-          
-          {submitted ? (
-            <CardContent className="pb-6">
-              <div className="text-center p-4 bg-zinc-900/50 rounded-lg border border-zinc-800 text-sm text-zinc-300">
-                If an account exists with <span className="font-semibold text-zinc-100">{email}</span>, you will receive a password reset link shortly.
-              </div>
-              <div className="mt-6 flex justify-center">
-                <Link to="/login" className="inline-flex items-center text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to sign in
-                </Link>
-              </div>
-            </CardContent>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <Input
-                  label="Email"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  disabled={loading}
-                />
-              </CardContent>
-              <CardFooter className="flex flex-col space-y-4 pt-4">
-                <Button type="submit" className="w-full" isLoading={loading}>
-                  Send Reset Link
-                </Button>
-                <Link to="/login" className="inline-flex items-center text-sm font-medium text-zinc-400 hover:text-zinc-300 transition-colors">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to sign in
-                </Link>
-              </CardFooter>
-            </form>
-          )}
-        </Card>
-      </motion.div>
+          </motion.div>
+        </section>
+      </main>
     </div>
   );
 }
