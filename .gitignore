@@ -13,7 +13,7 @@ venv/
 env/
 .env
 .env.local
-# .env.production is intentionally NOT gitignored — Vercel needs it for production builds
+.env.production
 .pytest_cache/
 backend/.pytest_tmp/
 pytest-cache-files-*/
@@ -34,6 +34,7 @@ backend/data/
 .vscode/
 .claude/
 .ruff_cache/
+agents/*
 
 .DS_Store
 npm-debug.log*
@@ -42,4 +43,3 @@ yarn-error.log*
 
 stitch_projects/*
 skills/*
-.vercel
