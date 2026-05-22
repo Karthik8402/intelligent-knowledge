@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -72,6 +73,7 @@ def health(
         "timestamp": datetime.now(UTC).isoformat(),
         "uptime_seconds": round(time.time() - _start_time),
         "version": "3.0.0",
+        "git_commit": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT") or "local",
         "python_version": platform.python_version(),
         "disk_free_mb": round(disk_free_mb, 2) if disk_free_mb >= 0 else None,
         "storage_backend": settings.storage_backend,

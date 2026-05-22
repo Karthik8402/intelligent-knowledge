@@ -382,17 +382,30 @@ jobs:
       - name: Wait for Render health check
         run: |
           echo "Waiting for Render deploy to complete..."
-          sleep 120
-          for i in $(seq 1 18); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" https://api-knowledge.karthikdev.app/health)
-            echo "Attempt $i: HTTP $status"
-            if [ "$status" = "200" ]; then
-              echo "Deploy healthy"
-              exit 0
+          expected_sha="${{ github.sha }}"
+          short_expected=$(echo "$expected_sha" | cut -c1-7)
+          echo "Expected commit SHA: $expected_sha (short: $short_expected)"
+          
+          # Initial wait for build to start and progress
+          sleep 60
+          
+          for i in $(seq 1 30); do
+            resp=$(curl -sf https://api-knowledge.karthikdev.app/health || true)
+            if [ -n "$resp" ]; then
+              commit=$(echo "$resp" | jq -r '.git_commit' 2>/dev/null || echo "unknown")
+              short_received=$(echo "$commit" | cut -c1-7)
+              echo "Attempt $i: Active commit is $commit (short: $short_received)"
+              
+              if [ "$short_received" = "$short_expected" ]; then
+                echo "Success! Deploy healthy and running new commit $short_expected."
+                exit 0
+              fi
+            else
+              echo "Attempt $i: Endpoint unreachable or returned an error status."
             fi
-            sleep 10
+            sleep 15
           done
-          echo "::error::Health check timed out after Render deploy"
+          echo "::error::Health check timed out waiting for commit $short_expected to deploy on Render."
           exit 1
 
       - name: Verify production health endpoint

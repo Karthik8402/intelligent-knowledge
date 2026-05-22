@@ -26,6 +26,8 @@ class TestHealthEndpoint:
         data = resp.json()
         assert "version" in data
         assert data["version"] == "3.0.0"
+        assert "git_commit" in data
+        assert data["git_commit"] == "local"
 
     def test_health_contains_uptime(self, test_client):
         resp = test_client.get("/health")
