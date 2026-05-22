@@ -56,12 +56,13 @@ def _build_pgvector_store(embeddings: Embeddings):
 
 def _build_chroma_store(embeddings: Embeddings):
     """Build a local ChromaDB store with a robust retry mechanism for race conditions."""
-    from langchain_chroma import Chroma
-    import time
     import random
+    import time
+
+    from langchain_chroma import Chroma
 
     settings = get_settings()
-    
+
     for attempt in range(3):
         try:
             return Chroma(
@@ -79,7 +80,7 @@ def _build_chroma_store(embeddings: Embeddings):
                 time.sleep(1.0 + random.random())
             else:
                 raise
-                
+
     # Final fallback attempt
     return Chroma(
         persist_directory=settings.chroma_persist_dir,
