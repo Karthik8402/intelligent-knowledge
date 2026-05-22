@@ -30,6 +30,7 @@ _start_time = time.time()
 
 
 @router.get("/health")
+@router.head("/health")
 def health(
     vector_store: Any = Depends(get_vector_store_optional),
     embeddings: Any = Depends(get_embeddings_instance),

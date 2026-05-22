@@ -17,6 +17,10 @@ class TestHealthEndpoint:
         data = resp.json()
         assert data["status"] in ("healthy", "degraded")
 
+    def test_health_head_returns_200(self, test_client):
+        resp = test_client.head("/health")
+        assert resp.status_code == 200
+
     def test_health_contains_version(self, test_client):
         resp = test_client.get("/health")
         data = resp.json()
