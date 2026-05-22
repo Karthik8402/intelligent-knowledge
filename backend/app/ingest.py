@@ -144,7 +144,8 @@ def ingest_files(
             if settings.storage_backend == "supabase":
                 from .core.supabase import upload_file_to_storage
 
-                upload_file_to_storage(file_bytes, upload.filename)
+                content_type = upload.content_type or "application/octet-stream"
+                upload_file_to_storage(file_bytes, upload.filename, content_type)
                 # For parsing, write temporarily to a temp location
                 import tempfile
 
