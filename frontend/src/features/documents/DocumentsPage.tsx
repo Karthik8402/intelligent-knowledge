@@ -21,7 +21,9 @@ export default function DocumentsPage() {
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     try {
-      setDocs(await listDocuments());
+      const data = await listDocuments();
+      setDocs(data);
+      window.dispatchEvent(new CustomEvent('documents-changed'));
     } catch (e: any) {
       console.error(e);
       showToast('error', 'Failed to load documents', e.message);

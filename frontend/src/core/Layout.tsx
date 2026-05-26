@@ -40,6 +40,19 @@ export default function Layout() {
     setUserMenuOpen(false);
   }, [fetchDocs, loading, location.pathname, user?.id]);
 
+  /* ── Listen for document changes from page actions ── */
+  useEffect(() => {
+    const handleDocsChanged = () => {
+      if (!authEnabled || user) {
+        void fetchDocs();
+      }
+    };
+    window.addEventListener('documents-changed', handleDocsChanged);
+    return () => {
+      window.removeEventListener('documents-changed', handleDocsChanged);
+    };
+  }, [fetchDocs, user]);
+
   /* ── Close user menu on outside click ── */
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
