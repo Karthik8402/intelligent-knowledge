@@ -119,7 +119,10 @@ def _build_owner_filter(
         conditions.append({"owner_id": owner_id})
 
     if document_ids:
-        conditions.append({"document_id": {"$in": document_ids}})
+        if len(document_ids) == 1:
+            conditions.append({"document_id": document_ids[0]})
+        else:
+            conditions.append({"$or": [{"document_id": doc_id} for doc_id in document_ids]})
 
     if not conditions:
         return None
