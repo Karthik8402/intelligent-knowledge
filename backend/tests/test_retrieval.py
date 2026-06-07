@@ -40,7 +40,7 @@ class TestRetrieveChunks:
         retrieve_chunks(mock_store, "q?", top_k=3, document_ids=["d1", "d2"])
 
         call_kwargs = mock_store.max_marginal_relevance_search.call_args
-        assert call_kwargs.kwargs["filter"] == {"document_id": {"$in": ["d1", "d2"]}}
+        assert call_kwargs.kwargs["filter"] == {"$or": [{"document_id": "d1"}, {"document_id": "d2"}]}
 
     @patch("app.retrieval.get_settings")
     def test_faiss_retrieval_normalizes_scores(self, mock_settings):
