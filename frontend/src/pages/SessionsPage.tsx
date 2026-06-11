@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { getSessions } from '../api';
 
 type SessionEntry = {
   id: string;
@@ -13,6 +14,9 @@ type SessionEntry = {
 
 export default function SessionsPage() {
   const { user } = useAuth();
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const currentUA = navigator.userAgent;
   const currentBrowser = /Chrome/.test(currentUA)
@@ -26,49 +30,41 @@ export default function SessionsPage() {
   const currentDevice = /Mobile/.test(currentUA) ? 'Mobile' : 'Desktop';
   const currentDeviceIcon = /Mobile/.test(currentUA) ? 'phone_android' : 'computer';
 
-  const lastSignIn = user?.last_sign_in_at
-    ? new Date(user.last_sign_in_at).toLocaleString()
-    : 'Current session';
+  useEffect(() => {
+    if (!user) return;
+    
+    getSessions()
+      .then(data => {
+        const mapped = data.sessions.map((s) => {
+          let formattedTime = 'Current session';
+          if (s.last_activity) {
+            formattedTime = new Date(s.last_activity).toLocaleString();
+          } else if (s.first_seen) {
+            formattedTime = new Date(s.first_seen).toLocaleString();
+          } else if (user?.last_sign_in_at) {
+            formattedTime = new Date(user.last_sign_in_at).toLocaleString();
+          }
 
-  // Mock session history for demonstration
-  const [sessions] = useState<SessionEntry[]>([
-    {
-      id: 'current',
-      device: currentDevice,
-      deviceIcon: currentDeviceIcon,
-      browser: currentBrowser,
-      location: 'Current location',
-      timestamp: lastSignIn,
-      isCurrent: true,
-    },
-    {
-      id: 'session-2',
-      device: 'Desktop',
-      deviceIcon: 'computer',
-      browser: 'Chrome',
-      location: 'Approximate location',
-      timestamp: new Date(Date.now() - 86400000).toLocaleString(),
-      isCurrent: false,
-    },
-    {
-      id: 'session-3',
-      device: 'Mobile',
-      deviceIcon: 'phone_android',
-      browser: 'Safari',
-      location: 'Approximate location',
-      timestamp: new Date(Date.now() - 172800000).toLocaleString(),
-      isCurrent: false,
-    },
-    {
-      id: 'session-4',
-      device: 'Desktop',
-      deviceIcon: 'computer',
-      browser: 'Firefox',
-      location: 'Approximate location',
-      timestamp: new Date(Date.now() - 432000000).toLocaleString(),
-      isCurrent: false,
-    },
-  ]);
+          return {
+            id: s.session_id,
+            device: s.is_anonymous ? 'Anonymous Session' : currentDevice,
+            deviceIcon: s.is_anonymous ? 'no_accounts' : currentDeviceIcon,
+            browser: s.is_anonymous ? 'Public Access' : currentBrowser,
+            location: 'Current location',
+            timestamp: formattedTime,
+            isCurrent: s.is_current,
+          };
+        });
+        setSessions(mapped);
+        setNote(data.note);
+      })
+      .catch(err => {
+        console.error(err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [user, currentDevice, currentDeviceIcon, currentBrowser]);
 
   if (!user) {
     return (
@@ -84,6 +80,17 @@ export default function SessionsPage() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Find current active session or fall back to first
+  const currentSession = sessions.find(s => s.isCurrent) || sessions[0];
+
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
       {/* Header */}
@@ -94,24 +101,26 @@ export default function SessionsPage() {
       </div>
 
       {/* Current Session */}
-      <div className="bg-surface-container/40 border border-primary/20 p-5 sm:p-6 rounded-2xl backdrop-blur-xl animate-scale-in" style={{ animationDelay: '0.1s' }}>
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="font-headline font-bold text-lg flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary/60">shield</span>
-            Current Session
-          </h4>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-400/10 text-green-400">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Active
+      {currentSession && (
+        <div className="bg-surface-container/40 border border-primary/20 p-5 sm:p-6 rounded-2xl backdrop-blur-xl animate-scale-in" style={{ animationDelay: '0.1s' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-headline font-bold text-lg flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary/60">shield</span>
+              Current Session
+            </h4>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-400/10 text-green-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              Active
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <InfoBlock icon="computer" label="Device" value={`${currentSession.device} — ${currentSession.browser}`} />
+            <InfoBlock icon="schedule" label="Last Sign In" value={currentSession.timestamp} />
+            <InfoBlock icon="person" label="Account" value={user.email || 'Unknown'} />
+            <InfoBlock icon="language" label="Location" value={currentSession.location} />
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <InfoBlock icon="computer" label="Device" value={`${currentDevice} — ${currentBrowser}`} />
-          <InfoBlock icon="schedule" label="Last Sign In" value={lastSignIn} />
-          <InfoBlock icon="person" label="Account" value={user.email || 'Unknown'} />
-          <InfoBlock icon="language" label="Location" value="Current location" />
-        </div>
-      </div>
+      )}
 
       {/* Session History */}
       <div className="bg-surface-container/40 border border-outline-variant/15 p-5 sm:p-6 rounded-2xl backdrop-blur-xl animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
@@ -159,7 +168,7 @@ export default function SessionsPage() {
         <div className="flex items-start gap-3">
           <span className="material-symbols-outlined text-primary/60 text-lg mt-0.5 flex-shrink-0">info</span>
           <div className="text-xs text-on-surface-variant leading-relaxed space-y-1">
-            <p><strong className="text-on-surface">Session data</strong> is shown for demonstration purposes. Full session management requires server-side session tracking.</p>
+            <p><strong className="text-on-surface">Session Info:</strong> {note || 'Session management is handled by Supabase Auth.'}</p>
             <p>Revoking sessions will be available in a future update.</p>
           </div>
         </div>

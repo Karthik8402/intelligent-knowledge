@@ -36,10 +36,6 @@ class TestHealthEndpoint:
         assert isinstance(data["uptime_seconds"], int)
         assert data["uptime_seconds"] >= 0
 
-
-
-
-
     def test_health_contains_python_version(self, test_client):
         resp = test_client.get("/health")
         data = resp.json()
@@ -284,8 +280,6 @@ class TestSettingsEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["settings"]["rag_top_k"] == 3
-
-
 
     def test_update_settings_as_non_admin_fails(self, test_client):
         from app.core.auth import UserContext, get_current_user

@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import UserContext, get_current_user
 from app.dependencies import get_registry
@@ -20,12 +20,11 @@ def get_analytics_overview(
     user: UserContext = Depends(get_current_user),
     reg=Depends(get_registry),
 ) -> dict[str, Any]:
-    """
-    Returns aggregated analytics data for the AnalyticsPage.
-    Computes: total docs, total chunks, avg chunks/doc, 
-    docs by source type, chunk distribution buckets,
-    upload timeline (docs per day, last 30 days),
-    top documents by chunk count.
+    """Returns aggregated analytics data for the AnalyticsPage.
+
+    Computes: total docs, total chunks, avg chunks/doc, docs by source type,
+    chunk distribution buckets, upload timeline (docs per day, last 30 days),
+    and top documents by chunk count.
     """
     docs = reg.list_documents(owner_id=user.user_id)
     try:
@@ -70,7 +69,7 @@ def get_analytics_overview(
             day = raw[:10]
             if day in timeline:
                 timeline[day] += 1
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
     # Top 5 documents by chunk count
@@ -98,22 +97,20 @@ def get_analytics_overview(
         },
         "source_type_breakdown": dict(source_counts),
         "chunk_distribution": buckets,
-        "upload_timeline": [
-            {"date": k, "count": v} for k, v in timeline.items()
-        ],
+        "upload_timeline": [{"date": k, "count": v} for k, v in timeline.items()],
         "top_documents": top_docs_out,
     }
 
 
 @router.get("/activity")
 def get_activity_feed(
-    limit: int = 20,
+    limit: int = Query(default=20, ge=0, le=100),
     user: UserContext = Depends(get_current_user),
     reg=Depends(get_registry),
 ) -> dict[str, Any]:
-    """
-    Returns a real activity feed derived from document upload events.
-    Each uploaded document = one 'document_uploaded' activity event.
+    """Return a real activity feed derived from document upload events.
+
+    Each uploaded document represents one 'document_uploaded' activity event.
     Sorted by created_at descending. Capped at `limit` items.
     """
     docs = reg.list_documents(owner_id=user.user_id)
@@ -123,15 +120,20 @@ def get_activity_feed(
         reverse=True,
     )[:limit]
 
-    events = []
-    for d in docs_sorted:
-        events.append({
+    events = [
+        {
             "type": "document_uploaded",
             "icon": "upload_file",
-            "title": f"Uploaded \"{d.get('file_name', 'Unknown')}\"",
-            "description": f"{d.get('chunks', 0)} chunks · {d.get('pages', 0)} pages · {d.get('source_type', 'file')}",
+            "title": f'Uploaded "{d.get("file_name", "Unknown")}"',
+            "description": (
+                f"{d.get('chunks', 0)} chunks"
+                f" \u00b7 {d.get('pages', 0)} pages"
+                f" \u00b7 {d.get('source_type', 'file')}"
+            ),
             "timestamp": d.get("created_at"),
             "document_id": d.get("document_id"),
-        })
+        }
+        for d in docs_sorted
+    ]
 
     return {"events": events, "total": len(events)}

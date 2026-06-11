@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -40,7 +40,7 @@ function PublicNav() {
   const { user } = useAuth();
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-outline-variant/20 bg-[#10141a]/90 backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 border-b border-outline-variant/20 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
@@ -75,7 +75,11 @@ function PublicNav() {
 }
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (!loading && user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background text-on-surface">
@@ -120,7 +124,7 @@ export default function HomePage() {
             <div className="mt-8 grid gap-3 text-sm text-on-surface-variant sm:grid-cols-3">
               {['Source-backed responses', 'Multi-provider LLMs', 'Secure user scope'].map((item) => (
                 <div key={item} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#7dd3a8]" />
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-400" />
                   <span>{item}</span>
                 </div>
               ))}
@@ -138,13 +142,13 @@ export default function HomePage() {
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-error" />
                   <div className="h-2.5 w-2.5 rounded-full bg-tertiary" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-[#7dd3a8]" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
                 </div>
                 <span className="text-xs font-medium uppercase tracking-widest text-outline">Knowledge Chat</span>
               </div>
 
               <div className="grid gap-0 md:grid-cols-[0.72fr_1fr]">
-                <aside className="border-b border-outline-variant/20 bg-[#0a0e14] p-4 md:border-b-0 md:border-r">
+                <aside className="border-b border-outline-variant/20 bg-background p-4 md:border-b-0 md:border-r">
                   <div className="mb-4 flex items-center gap-2 rounded-md border border-outline-variant/20 bg-surface px-3 py-2 text-sm text-outline">
                     <Search className="h-4 w-4" />
                     Search documents

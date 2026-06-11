@@ -54,9 +54,7 @@ class ChatRequest(BaseModel):
                     f"History turn {i}: 'role' must be 'user' or 'assistant', got {role!r}"
                 )
             if not isinstance(content, str) or not content.strip():
-                raise ValueError(
-                    f"History turn {i}: 'content' must be a non-empty string"
-                )
+                raise ValueError(f"History turn {i}: 'content' must be a non-empty string")
         return v
 
 

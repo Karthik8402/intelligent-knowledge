@@ -167,7 +167,7 @@ class TestGetChunks:
         """Simulates a Chroma-style .get() interface."""
         vector_store = MagicMock()
         del vector_store.docstore  # ensure it uses the .get() path
-        del vector_store.get_by_ids # ensure pgvector path is not taken
+        del vector_store.get_by_ids  # ensure pgvector path is not taken
 
         vector_store.get.return_value = {
             "documents": ["chunk text here"],
@@ -184,7 +184,7 @@ class TestGetChunks:
         """If .get() raises an exception, should silently return []."""
         vector_store = MagicMock()
         del vector_store.docstore
-        del vector_store.get_by_ids # ensure pgvector path is not taken
+        del vector_store.get_by_ids  # ensure pgvector path is not taken
 
         vector_store.get.side_effect = Exception("DB error")
 
@@ -219,16 +219,16 @@ class TestGetChunks:
 
         doc_chunk_1 = Document(
             page_content="chunk 1 text",
-            metadata={"document_id": "doc-pg", "chunk_index": 0, "page": 0}
+            metadata={"document_id": "doc-pg", "chunk_index": 0, "page": 0},
         )
         doc_chunk_2 = Document(
             page_content="chunk 2 text",
-            metadata={"document_id": "doc-pg", "chunk_index": 1, "page": 1}
+            metadata={"document_id": "doc-pg", "chunk_index": 1, "page": 1},
         )
 
         vector_store = MagicMock()
         del vector_store.docstore  # Ensure docstore path is not taken
-        del vector_store.get       # Ensure chroma path is not taken
+        del vector_store.get  # Ensure chroma path is not taken
 
         vector_store.get_by_ids.return_value = [doc_chunk_2, doc_chunk_1]
 
@@ -243,4 +243,3 @@ class TestGetChunks:
         assert result[0]["page"] == 0
         assert result[1]["text"] == "chunk 2 text"
         assert result[1]["page"] == 1
-

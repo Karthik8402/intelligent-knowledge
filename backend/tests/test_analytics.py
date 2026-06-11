@@ -9,12 +9,12 @@ Covers:
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
+import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class TestAnalyticsOverviewEmpty:
         for i in range(1, len(dates)):
             prev = datetime.strptime(dates[i - 1], "%Y-%m-%d")
             curr = datetime.strptime(dates[i], "%Y-%m-%d")
-            assert (curr - prev).days == 1, f"Gap between {dates[i-1]} and {dates[i]}"
+            assert (curr - prev).days == 1, f"Gap between {dates[i - 1]} and {dates[i]}"
 
 
 # ---------------------------------------------------------------------------
@@ -336,9 +336,7 @@ class TestAnalyticsActivityEvents:
         resp = test_client.get("/analytics/activity")
         assert "my_thesis.pdf" in resp.json()["events"][0]["title"]
 
-    def test_event_description_contains_chunk_count(
-        self, test_client: TestClient, tmp_registry
-    ):
+    def test_event_description_contains_chunk_count(self, test_client: TestClient, tmp_registry):
         """Event description must include the chunk count."""
         tmp_registry.upsert(_make_doc("d1", chunks=42))
 
@@ -368,9 +366,7 @@ class TestAnalyticsActivityOrdering:
         resp = test_client.get("/analytics/activity")
         events = resp.json()["events"]
         timestamps = [e["timestamp"] for e in events]
-        assert timestamps == sorted(timestamps, reverse=True), (
-            "Events not sorted newest-first"
-        )
+        assert timestamps == sorted(timestamps, reverse=True), "Events not sorted newest-first"
 
     def test_default_limit_is_20(self, test_client: TestClient, tmp_registry):
         """Default endpoint should return at most 20 events."""
@@ -395,6 +391,16 @@ class TestAnalyticsActivityOrdering:
         resp = test_client.get("/analytics/activity?limit=0")
         assert resp.status_code == 200
         assert resp.json()["events"] == []
+
+    def test_limit_clamped_at_100(self, test_client: TestClient):
+        """?limit=101 must return 422 validation error."""
+        resp = test_client.get("/analytics/activity?limit=101")
+        assert resp.status_code == 422
+
+    def test_limit_negative_returns_422(self, test_client: TestClient):
+        """?limit=-1 must return 422 validation error."""
+        resp = test_client.get("/analytics/activity?limit=-1")
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

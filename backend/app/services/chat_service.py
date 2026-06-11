@@ -75,8 +75,15 @@ class ChatService:
         not mentioned by the user.
         """
         _KEYWORDS = (
-            "resume", "cv", "policy", "report", "invoice",
-            "contract", "manual", "spec", "whitepaper",
+            "resume",
+            "cv",
+            "policy",
+            "report",
+            "invoice",
+            "contract",
+            "manual",
+            "spec",
+            "whitepaper",
         )
         q = question.lower()
         question_keywords = {kw for kw in _KEYWORDS if kw in q}
@@ -91,8 +98,7 @@ class ChatService:
                 continue
             # Match if keyword appears in question OR in the document's filename.
             if any(kw in fname for kw in _KEYWORDS) and (
-                any(kw in q for kw in _KEYWORDS)
-                or any(kw in fname for kw in question_keywords)
+                any(kw in q for kw in _KEYWORDS) or any(kw in fname for kw in question_keywords)
             ):
                 matched.append(doc_id)
 
@@ -109,9 +115,12 @@ class ChatService:
     ) -> ChatResponse:
         """Core chat logic shared by standard endpoint."""
         from fastapi import HTTPException
+
         if history:
             for turn in history:
-                if turn.get("role") == "user" and ChatService.check_prompt_injection(turn.get("content", "")):
+                if turn.get("role") == "user" and ChatService.check_prompt_injection(
+                    turn.get("content", "")
+                ):
                     raise HTTPException(status_code=400, detail="Invalid input detected in history")
 
         if reg.count(owner_id=owner_id) == 0 or vector_store is None:
@@ -206,7 +215,9 @@ class ChatService:
     ):
         if history:
             for turn in history:
-                if turn.get("role") == "user" and ChatService.check_prompt_injection(turn.get("content", "")):
+                if turn.get("role") == "user" and ChatService.check_prompt_injection(
+                    turn.get("content", "")
+                ):
                     yield {"event": "error", "data": "Invalid input detected in history"}
                     return
 
@@ -276,7 +287,9 @@ class ChatService:
 
             if streamed_chars == 0:
                 logger.warning("LLM stream returned 0 chars; falling back to non-stream response")
-                fallback_generation = answer_with_citations(question, state.relevant_docs, history=history)
+                fallback_generation = answer_with_citations(
+                    question, state.relevant_docs, history=history
+                )
                 fallback_answer = fallback_generation.get("answer", FALLBACK_ANSWER)
                 if fallback_answer == FALLBACK_ANSWER and state.relevant_docs:
                     fallback_answer = ChatService._extractive_fallback(state.relevant_docs)

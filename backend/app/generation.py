@@ -47,7 +47,6 @@ class StreamResult:
         return self._extra.get(key, default)
 
 
-
 def get_embeddings() -> Embeddings:
     settings = get_settings()
 
@@ -248,6 +247,7 @@ def answer_with_citations(
         response = llm.invoke(messages)
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).exception("LLM generation failed")
         raise RuntimeError(f"LLM generation failed: {e}") from e
 

@@ -206,11 +206,7 @@ def retrieve_chunks(
         raw = vector_store.similarity_search_with_score(query=question, k=faiss_fetch_k)
         docs = [(doc, float(score)) for doc, score in raw]
         if owner_id and owner_id != "anonymous":
-            docs = [
-                (doc, score)
-                for doc, score in docs
-                if doc.metadata.get("owner_id") == owner_id
-            ]
+            docs = [(doc, score) for doc, score in docs if doc.metadata.get("owner_id") == owner_id]
         # Trim to top_k after filtering
         docs = docs[:top_k]
 

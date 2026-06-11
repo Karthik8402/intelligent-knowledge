@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { BRAND } from '../../config/branding';
+import { useTheme } from '../../hooks/useTheme';
 
 export default function RegisterPage() {
   const { signUpWithEmail } = useAuth();
@@ -18,6 +19,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { theme, setTheme } = useTheme();
+
+  const cycleTheme = () => {
+    const next = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system';
+    setTheme(next);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +57,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-background text-on-surface">
-      <header className="border-b border-outline-variant/20 bg-[#10141a]/90 backdrop-blur-xl">
+      <header className="border-b border-outline-variant/20 bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex min-w-0 items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
@@ -99,7 +106,18 @@ export default function RegisterPage() {
             transition={{ duration: 0.4 }}
             className="w-full max-w-2xl"
           >
-            <div className="rounded-lg border border-outline-variant/20 bg-surface-container-low p-5 shadow-2xl shadow-black/25 sm:p-6 lg:p-7">
+            <div className="relative rounded-2xl border border-outline-variant/20 bg-surface-container p-5 shadow-2xl shadow-black/25 sm:p-6 lg:p-7">
+              {/* Theme Toggle Button */}
+              <button
+                onClick={cycleTheme}
+                type="button"
+                className="absolute top-4 right-4 text-outline hover:text-on-surface p-1.5 rounded-full hover:bg-surface-container-highest transition-colors"
+                title={`Switch theme (currently ${theme})`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  {theme === 'system' ? 'brightness_auto' : theme === 'light' ? 'light_mode' : 'dark_mode'}
+                </span>
+              </button>
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="font-headline text-2xl font-bold tracking-tight">Create account</h2>

@@ -132,7 +132,6 @@ def _validate_production_env(settings) -> None:
     logger.info("Environment validation passed")
 
 
-
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------

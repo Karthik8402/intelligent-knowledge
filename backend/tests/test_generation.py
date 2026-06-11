@@ -117,6 +117,7 @@ class TestAnswerWithCitations:
 
         docs = [(make_document(), 0.9)]
         import pytest
+
         with pytest.raises(RuntimeError, match="LLM generation failed"):
             answer_with_citations("question", docs)
 

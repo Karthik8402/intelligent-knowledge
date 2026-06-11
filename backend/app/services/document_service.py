@@ -15,7 +15,12 @@ class DocumentService:
         if not files:
             raise NoFilesUploadedError()
 
-        logger.info("Upload request from user=%s: %d file(s) - e.g. %s", owner_id, len(files), repr(files[0].filename) if files else "")
+        logger.info(
+            "Upload request from user=%s: %d file(s) - e.g. %s",
+            owner_id,
+            len(files),
+            repr(files[0].filename) if files else "",
+        )
         results = ingest_files(files, vector_store, owner_id=owner_id)
         logger.info("Upload complete: %s", [r["status"] for r in results])
         return results
@@ -47,7 +52,11 @@ class DocumentService:
                 if ids_to_remove and hasattr(vector_store, "delete"):
                     try:
                         vector_store.delete(ids=ids_to_remove)
-                        logger.info("Deleted %d pgvector vectors for document %s", len(ids_to_remove), document_id)
+                        logger.info(
+                            "Deleted %d pgvector vectors for document %s",
+                            len(ids_to_remove),
+                            document_id,
+                        )
                     except Exception as e:
                         logger.warning("Failed to delete pgvector chunks: %s", e)
             elif settings.vector_store.lower() == "chroma":
@@ -105,22 +114,28 @@ class DocumentService:
         elif hasattr(vector_store, "get_by_ids"):
             try:
                 from app.storage import registry as reg
+
                 doc = reg.get(document_id)
                 if doc:
                     chunks_count = doc.get("chunks", 0)
                     ids = [f"{document_id}:{i}" for i in range(chunks_count)]
                     docs = vector_store.get_by_ids(ids)
                     docs_sorted = sorted(
-                        docs,
-                        key=lambda d: d.metadata.get("chunk_index", 0) if d.metadata else 0
+                        docs, key=lambda d: d.metadata.get("chunk_index", 0) if d.metadata else 0
                     )
                     for doc in docs_sorted:
                         meta = doc.metadata or {}
-                        if owner_id and owner_id != "anonymous" and meta.get("owner_id") != owner_id:
+                        if (
+                            owner_id
+                            and owner_id != "anonymous"
+                            and meta.get("owner_id") != owner_id
+                        ):
                             continue
                         chunks.append({"text": doc.page_content, "page": meta.get("page")})
             except Exception as e:
-                logger.warning("Failed to query chunks via get_by_ids for document %s: %s", document_id, e)
+                logger.warning(
+                    "Failed to query chunks via get_by_ids for document %s: %s", document_id, e
+                )
         elif hasattr(vector_store, "get"):
             try:
                 where_filter: dict = {"document_id": document_id}

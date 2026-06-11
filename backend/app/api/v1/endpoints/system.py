@@ -205,6 +205,7 @@ def update_settings(
 
     get_settings.cache_clear()
     from app.generation import get_chat_model
+
     get_chat_model.cache_clear()
 
     return {
