@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, cast
+import logging
+import time
+from typing import Any
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -11,6 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from .config import get_settings
 
@@ -20,6 +23,8 @@ except ImportError:
     ChatGroq = None
 else:
     ChatGroq = _ChatGroq
+
+logger = logging.getLogger(__name__)
 
 FALLBACK_ANSWER = "Sorry, I could not find this information in your uploaded documents."
 
@@ -47,20 +52,13 @@ class StreamResult:
         return self._extra.get(key, default)
 
 
-import time
-import logging
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-
-logger = logging.getLogger(__name__)
-
-
 class ThrottledGoogleEmbeddings(GoogleGenerativeAIEmbeddings):
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         # Free tier limit is 100 requests per minute.
         # Let's batch into chunks of 30, and sleep/retry between them.
         batch_size = 30
         all_embeddings = []
-        
+
         @retry(
             reraise=True,
             stop=stop_after_attempt(5),
@@ -78,7 +76,7 @@ class ThrottledGoogleEmbeddings(GoogleGenerativeAIEmbeddings):
             if i + batch_size < len(texts):
                 # Small delay between batches to avoid hitting rate limits
                 time.sleep(1.0)
-                
+
         return all_embeddings
 
 
