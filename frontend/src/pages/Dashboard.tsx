@@ -150,8 +150,8 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
 function HealthBadge({ label, ok }: { label: string; ok: boolean }) {
   return (
     <div className="flex items-center gap-2">
-      <div className={`w-2 h-2 rounded-full ${ok ? 'bg-[#2dd36f]' : 'bg-red-400'}`} 
-           style={{ boxShadow: ok ? '0 0 6px rgba(45, 211, 111, 0.4)' : '0 0 6px rgba(248,113,113,0.4)' }} />
+      <div className={`w-2 h-2 rounded-full ${ok ? 'bg-green-400' : 'bg-red-400'}`} 
+           style={{ boxShadow: ok ? '0 0 6px rgba(74, 222, 128, 0.4)' : '0 0 6px rgba(248,113,113,0.4)' }} />
       <span className="text-xs text-on-surface-variant">{label}</span>
     </div>
   );

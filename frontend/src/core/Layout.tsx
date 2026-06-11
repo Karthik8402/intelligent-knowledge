@@ -6,10 +6,24 @@ import ToastContainer from '../shared/Toast';
 import { useAuth } from '../hooks/useAuth';
 import { authEnabled } from '../lib/supabase';
 import { BRAND } from '../config/branding';
+import { useTheme, type ThemePreference } from '../hooks/useTheme';
+
+const THEME_CYCLE: ThemePreference[] = ['system', 'light', 'dark'];
+const THEME_ICON: Record<ThemePreference, string> = {
+  system: 'brightness_auto',
+  light: 'light_mode',
+  dark: 'dark_mode',
+};
+const THEME_LABEL: Record<ThemePreference, string> = {
+  system: 'System',
+  light: 'Light',
+  dark: 'Dark',
+};
 
 export default function Layout() {
   const { loading, user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [pageKey, setPageKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -17,6 +31,11 @@ export default function Layout() {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const cycleTheme = () => {
+    const idx = THEME_CYCLE.indexOf(theme);
+    setTheme(THEME_CYCLE[(idx + 1) % THEME_CYCLE.length]);
+  };
 
   const fetchDocs = useCallback(async () => {
     try {
@@ -73,8 +92,8 @@ export default function Layout() {
   const navClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-6 py-3 transition-all duration-300 ease-out-expo relative overflow-hidden group ${
       isActive
-        ? 'text-[#b5c4ff] border-l-2 border-[#b5c4ff] bg-[#1c2026] font-bold'
-        : 'text-[#434654] hover:text-[#dfe2eb] hover:bg-[#1c2026]'
+        ? 'text-primary border-l-2 border-primary bg-surface-container font-bold'
+        : 'text-outline hover:text-on-surface hover:bg-surface-container'
     }`;
 
   const navItems = [
@@ -84,6 +103,11 @@ export default function Layout() {
     { to: '/chunks', icon: 'segment', label: 'Chunks' },
     { to: '/status', icon: 'analytics', label: 'System Status' },
     { to: '/settings', icon: 'settings', label: 'Settings' },
+    { to: '/analytics', icon: 'bar_chart', label: 'Analytics' },
+    { to: '/models', icon: 'model_training', label: 'AI Models' },
+    { to: '/sessions', icon: 'history', label: 'Sessions' },
+    { to: '/activity', icon: 'timeline', label: 'Activity' },
+    { to: '/notifications', icon: 'notifications', label: 'Notifications' },
   ];
 
   const PAGE_TITLES: Record<string, string> = {
@@ -94,6 +118,13 @@ export default function Layout() {
     '/status': 'System Status',
     '/settings': 'Settings',
     '/profile': 'Profile',
+    '/analytics': 'Analytics',
+    '/models': 'AI Models',
+    '/sessions': 'Sessions',
+    '/activity': 'Activity',
+    '/notifications': 'Notifications',
+    '/help': 'Help & Support',
+    '/about': 'About',
   };
 
   const isChat = location.pathname === '/chat';
@@ -119,14 +150,14 @@ export default function Layout() {
 
       {/* ── Sidebar ── */}
       <aside className={`
-        fixed left-0 top-0 h-screen flex flex-col z-40 w-72 border-none bg-[#0a0e14] shadow-none
+        fixed left-0 top-0 h-screen flex flex-col z-40 w-72 border-none bg-surface-container-lowest shadow-none
         transition-transform duration-300 ease-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
       `}>
         <div className="px-6 py-8 flex items-center justify-between">
           <NavLink to="/dashboard" className="group">
-            <h1 className="font-['Space_Grotesk'] font-bold text-[#b5c4ff] tracking-tighter text-2xl animate-fade-in-down group-hover:opacity-80 transition-opacity">
+            <h1 className="font-['Space_Grotesk'] font-bold text-primary tracking-tighter text-2xl animate-fade-in-down group-hover:opacity-80 transition-opacity">
               {BRAND.name}
             </h1>
             <div className="h-[2px] w-12 bg-gradient-to-r from-primary to-secondary mt-2 rounded-full" />
@@ -176,7 +207,7 @@ export default function Layout() {
         <div className="p-4 mt-auto border-t border-outline-variant/10 relative" ref={userMenuRef}>
           {/* User dropdown menu */}
           {userMenuOpen && user && (
-            <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#1c2026] border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden animate-fade-in-up z-50">
+            <div className="absolute bottom-full left-4 right-4 mb-2 bg-surface-container border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden animate-fade-in-up z-50">
               <div className="px-4 py-3 border-b border-outline-variant/10">
                 <p className="text-sm font-bold text-on-surface truncate">{profileName}</p>
                 <p className="text-[11px] text-outline truncate">{user.email}</p>
@@ -188,6 +219,14 @@ export default function Layout() {
               <NavLink to="/settings" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
                 <span className="material-symbols-outlined text-base">settings</span>
                 Settings
+              </NavLink>
+              <NavLink to="/help" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+                <span className="material-symbols-outlined text-base">help</span>
+                Help & Support
+              </NavLink>
+              <NavLink to="/about" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+                <span className="material-symbols-outlined text-base">info</span>
+                About
               </NavLink>
               <button onClick={handleSignOut} className="flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors w-full text-left">
                 <span className="material-symbols-outlined text-base">logout</span>
@@ -220,24 +259,34 @@ export default function Layout() {
       <main
         ref={mainRef}
         className={`
-          flex-1 h-screen overflow-x-hidden relative w-full bg-[#10141a] custom-scrollbar
+          flex-1 h-screen overflow-x-hidden relative w-full bg-background custom-scrollbar
           ml-0 lg:ml-72
           ${isChat ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}
         `}
       >
 
-        <header className="flex justify-between items-center w-full px-4 sm:px-6 py-4 sticky top-0 z-50 bg-[#10141a]/80 backdrop-blur-md border-b border-[#434654]/15 shadow-[0_40px_60px_-15px_rgba(181,196,255,0.08)] flex-shrink-0">
+        <header className="flex justify-between items-center w-full px-4 sm:px-6 py-4 sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-outline-variant/15 shadow-[0_40px_60px_-15px_rgba(var(--color-primary),0.08)] flex-shrink-0">
           <div className="flex items-center gap-3 animate-fade-in-down">
             {/* Hamburger — mobile only */}
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 hover:bg-surface-container rounded-xl transition-colors">
               <span className="material-symbols-outlined text-outline">menu</span>
             </button>
-            <h2 className="font-['Space_Grotesk'] font-medium text-base sm:text-lg text-[#b5c4ff]">
+            <h2 className="font-['Space_Grotesk'] font-medium text-base sm:text-lg text-primary">
               {PAGE_TITLES[location.pathname] || 'Quick Knowledge'}
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${documents.length > 0 ? 'bg-[#2dd36f] animate-pulse-glow' : 'bg-outline'}`} style={{ boxShadow: documents.length > 0 ? '0 0 8px rgba(45, 211, 111, 0.5)' : 'none' }} />
+            {/* Theme toggle */}
+            <button
+              onClick={cycleTheme}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors"
+              title={`Theme: ${THEME_LABEL[theme]}`}
+            >
+              <span className="material-symbols-outlined text-lg text-outline hover:text-on-surface transition-colors">
+                {THEME_ICON[theme]}
+              </span>
+            </button>
+            <div className={`w-2 h-2 rounded-full ${documents.length > 0 ? 'bg-green-400 animate-pulse-glow' : 'bg-outline'}`} style={{ boxShadow: documents.length > 0 ? '0 0 8px rgba(74, 222, 128, 0.5)' : 'none' }} />
             <span className="text-[10px] text-outline uppercase tracking-widest font-bold hidden sm:inline">
               {documents.length > 0 ? `${documents.length} docs active` : 'no docs'}
             </span>

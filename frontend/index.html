@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quick Knowledge — AI-Powered Knowledge Platform</title>
+    <!-- Prevent flash of wrong theme (FOWT) — runs before React -->
+    <script>
+      (function(){
+        var t = localStorage.getItem('ik-theme');
+        var dark = t === 'dark' || ((!t || t === 'system') && matchMedia('(prefers-color-scheme:dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      })();
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
   </head>

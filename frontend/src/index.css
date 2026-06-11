@@ -3,6 +3,151 @@
 @tailwind utilities;
 
 /* ================================================================
+   THEME COLOR TOKENS — CSS Custom Properties (RGB channels)
+   These power all Tailwind semantic tokens via rgb(var(--color-*) / <alpha-value>)
+   ================================================================ */
+
+@layer base {
+  /* ── Light theme (default) ── */
+  :root {
+    /* Surfaces */
+    --color-background: 245 245 247;
+    --color-surface: 255 255 255;
+    --color-surface-dim: 220 220 230;
+    --color-surface-bright: 250 250 255;
+    --color-surface-container-lowest: 232 232 240;
+    --color-surface-container-low: 238 238 245;
+    --color-surface-container: 240 240 245;
+    --color-surface-container-high: 235 235 242;
+    --color-surface-container-highest: 228 228 238;
+    --color-surface-variant: 225 225 235;
+    --color-surface-tint: 67 97 238;
+
+    /* On-surfaces */
+    --color-on-surface: 26 26 46;
+    --color-on-surface-variant: 61 61 92;
+    --color-on-background: 26 26 46;
+    --color-inverse-surface: 45 49 55;
+    --color-inverse-on-surface: 245 245 247;
+    --color-inverse-primary: 22 83 214;
+
+    /* Outlines */
+    --color-outline: 107 107 138;
+    --color-outline-variant: 192 192 208;
+
+    /* Primary */
+    --color-primary: 67 97 238;
+    --color-on-primary: 255 255 255;
+    --color-primary-container: 219 225 255;
+    --color-on-primary-container: 0 35 107;
+    --color-primary-fixed: 219 225 255;
+    --color-primary-fixed-dim: 67 97 238;
+    --color-on-primary-fixed: 0 23 76;
+    --color-on-primary-fixed-variant: 0 61 171;
+
+    /* Secondary */
+    --color-secondary: 114 9 183;
+    --color-on-secondary: 255 255 255;
+    --color-secondary-container: 237 220 255;
+    --color-on-secondary-container: 69 0 134;
+    --color-secondary-fixed: 237 220 255;
+    --color-secondary-fixed-dim: 114 9 183;
+    --color-on-secondary-fixed: 41 0 85;
+    --color-on-secondary-fixed-variant: 98 0 188;
+
+    /* Tertiary */
+    --color-tertiary: 247 127 0;
+    --color-on-tertiary: 255 255 255;
+    --color-tertiary-container: 255 219 199;
+    --color-on-tertiary-container: 71 30 0;
+    --color-tertiary-fixed: 255 219 199;
+    --color-tertiary-fixed-dim: 247 127 0;
+    --color-on-tertiary-fixed: 49 19 0;
+    --color-on-tertiary-fixed-variant: 115 54 0;
+
+    /* Error */
+    --color-error: 186 26 26;
+    --color-on-error: 255 255 255;
+    --color-error-container: 255 218 214;
+    --color-on-error-container: 65 0 2;
+
+    /* Toast */
+    --toast-bg: 255 255 255;
+    --toast-color: 26 26 46;
+    --toast-border: 224 224 232;
+  }
+
+  /* ── Dark theme ── */
+  .dark {
+    /* Surfaces */
+    --color-background: 16 20 26;
+    --color-surface: 16 20 26;
+    --color-surface-dim: 16 20 26;
+    --color-surface-bright: 53 57 64;
+    --color-surface-container-lowest: 10 14 20;
+    --color-surface-container-low: 24 28 34;
+    --color-surface-container: 28 32 38;
+    --color-surface-container-high: 38 42 49;
+    --color-surface-container-highest: 49 53 60;
+    --color-surface-variant: 49 53 60;
+    --color-surface-tint: 181 196 255;
+
+    /* On-surfaces */
+    --color-on-surface: 223 226 235;
+    --color-on-surface-variant: 195 197 215;
+    --color-on-background: 223 226 235;
+    --color-inverse-surface: 223 226 235;
+    --color-inverse-on-surface: 45 49 55;
+    --color-inverse-primary: 22 83 214;
+
+    /* Outlines */
+    --color-outline: 141 144 160;
+    --color-outline-variant: 67 70 84;
+
+    /* Primary */
+    --color-primary: 181 196 255;
+    --color-on-primary: 0 41 122;
+    --color-primary-container: 99 138 255;
+    --color-on-primary-container: 0 35 107;
+    --color-primary-fixed: 219 225 255;
+    --color-primary-fixed-dim: 181 196 255;
+    --color-on-primary-fixed: 0 23 76;
+    --color-on-primary-fixed-variant: 0 61 171;
+
+    /* Secondary */
+    --color-secondary: 216 185 255;
+    --color-on-secondary: 69 0 134;
+    --color-secondary-container: 110 6 208;
+    --color-on-secondary-container: 213 181 255;
+    --color-secondary-fixed: 237 220 255;
+    --color-secondary-fixed-dim: 216 185 255;
+    --color-on-secondary-fixed: 41 0 85;
+    --color-on-secondary-fixed-variant: 98 0 188;
+
+    /* Tertiary */
+    --color-tertiary: 255 182 136;
+    --color-on-tertiary: 81 36 0;
+    --color-tertiary-container: 224 115 19;
+    --color-on-tertiary-container: 71 30 0;
+    --color-tertiary-fixed: 255 219 199;
+    --color-tertiary-fixed-dim: 255 182 136;
+    --color-on-tertiary-fixed: 49 19 0;
+    --color-on-tertiary-fixed-variant: 115 54 0;
+
+    /* Error */
+    --color-error: 255 180 171;
+    --color-on-error: 105 0 5;
+    --color-error-container: 147 0 10;
+    --color-on-error-container: 255 218 214;
+
+    /* Toast */
+    --toast-bg: 24 24 27;
+    --toast-color: 244 244 245;
+    --toast-border: 39 39 42;
+  }
+}
+
+/* ================================================================
    KEYFRAME ANIMATIONS
    ================================================================ */
 
@@ -72,10 +217,10 @@
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 6px rgba(181, 196, 255, 0.3);
+    box-shadow: 0 0 6px rgba(var(--color-primary), 0.3);
   }
   50% {
-    box-shadow: 0 0 20px rgba(181, 196, 255, 0.7), 0 0 40px rgba(181, 196, 255, 0.2);
+    box-shadow: 0 0 20px rgba(var(--color-primary), 0.7), 0 0 40px rgba(var(--color-primary), 0.2);
   }
 }
 
@@ -155,10 +300,10 @@
 
 @keyframes borderGlow {
   0%, 100% {
-    border-color: rgba(181, 196, 255, 0.15);
+    border-color: rgba(var(--color-primary), 0.15);
   }
   50% {
-    border-color: rgba(181, 196, 255, 0.4);
+    border-color: rgba(var(--color-primary), 0.4);
   }
 }
 
@@ -176,14 +321,21 @@
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
 
-  ::selection {
-    background: rgba(181, 196, 255, 0.3);
-    color: #dfe2eb;
+  /* Dark-mode selection */
+  .dark ::selection {
+    background: rgba(var(--color-primary), 0.3);
+    color: rgb(var(--color-on-surface));
+  }
+
+  /* Light-mode selection */
+  :root:not(.dark) ::selection {
+    background: rgba(67, 97, 238, 0.3);
+    color: rgb(var(--color-on-surface));
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #434654 transparent;
+    scrollbar-color: rgb(var(--color-outline-variant)) transparent;
   }
 }
 
@@ -211,7 +363,7 @@
 
   /* Effects */
   .animate-shimmer {
-    background: linear-gradient(90deg, transparent 25%, rgba(181, 196, 255, 0.05) 50%, transparent 75%);
+    background: linear-gradient(90deg, transparent 25%, rgba(var(--color-primary), 0.05) 50%, transparent 75%);
     background-size: 200% 100%;
     animation: shimmer 1.8s ease-in-out infinite;
   }
@@ -263,7 +415,7 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #434654;
+    background: rgb(var(--color-outline-variant));
     border-radius: 10px;
   }
 
@@ -280,7 +432,7 @@
   }
   .hover-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px -5px rgba(181, 196, 255, 0.15);
+    box-shadow: 0 8px 25px -5px rgba(var(--color-primary), 0.15);
   }
 
   .hover-scale {
@@ -291,12 +443,12 @@
   }
 
   .focus-glow:focus-within {
-    box-shadow: 0 0 0 2px rgba(181, 196, 255, 0.3), 0 0 20px rgba(181, 196, 255, 0.08);
+    box-shadow: 0 0 0 2px rgba(var(--color-primary), 0.3), 0 0 20px rgba(var(--color-primary), 0.08);
   }
 
   /* Skeleton loader */
   .skeleton {
-    background: linear-gradient(90deg, #1c2026 25%, #262a31 50%, #1c2026 75%);
+    background: linear-gradient(90deg, rgb(var(--color-surface-container)) 25%, rgb(var(--color-surface-container-high)) 50%, rgb(var(--color-surface-container)) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.8s ease-in-out infinite;
     border-radius: 8px;
@@ -312,7 +464,7 @@ html, body, #root {
 }
 
 body {
-  background-color: theme('colors.background');
-  color: theme('colors.on-surface');
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-on-surface));
   overflow-x: hidden;
 }

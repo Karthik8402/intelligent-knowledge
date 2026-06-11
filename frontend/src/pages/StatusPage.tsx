@@ -71,11 +71,11 @@ export default function StatusPage() {
       {health && (
         <div className={`flex flex-wrap items-center justify-between gap-4 sm:gap-6 px-5 sm:px-6 py-4 rounded-2xl border animate-scale-in ${
           health.status === 'healthy'
-            ? 'bg-[#2dd36f]/5 border-[#2dd36f]/20'
+            ? 'bg-green-400/5 border-green-400/20'
             : 'bg-error/5 border-error/20'
         }`}>
           <div className="flex items-center gap-3">
-            <span className={`w-3 h-3 rounded-full ${health.status === 'healthy' ? 'bg-[#2dd36f] animate-pulse-glow' : 'bg-error'}`} />
+            <span className={`w-3 h-3 rounded-full ${health.status === 'healthy' ? 'bg-green-400 animate-pulse-glow' : 'bg-error'}`} />
             <span className="text-xs font-bold text-on-surface uppercase tracking-wide">{health.status}</span>
             <span className="text-[10px] text-outline/70">Uptime {formatUptime(health.uptime_seconds)}</span>
           </div>
@@ -111,7 +111,7 @@ export default function StatusPage() {
                   <span className={`material-symbols-outlined text-lg ${item.tone}/70`}>{item.icon}</span>
                   {item.label}
                 </span>
-                <span className={`font-mono ${item.tone} bg-white/5 px-3 py-1 rounded-full text-xs font-bold uppercase`}>{item.value}</span>
+                <span className={`font-mono ${item.tone} bg-surface-container/60 px-3 py-1 rounded-full text-xs font-bold uppercase`}>{item.value}</span>
               </div>
             ))}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-outline-variant/10 pb-4">
@@ -140,10 +140,10 @@ export default function StatusPage() {
         <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
           <div className="bg-surface-container-high/60 border border-outline-variant/15 p-5 sm:p-6 rounded-2xl sm:rounded-3xl backdrop-blur-xl">
             <div className="flex items-center justify-between">
-              <span className={`material-symbols-outlined text-3xl ${status.store_initialized ? 'text-[#2dd36f]' : 'text-error'}`}>
+              <span className={`material-symbols-outlined text-3xl ${status.store_initialized ? 'text-green-400' : 'text-error'}`}>
                 {status.store_initialized ? 'verified' : 'gpp_bad'}
               </span>
-              <span className={`text-[10px] uppercase tracking-[0.2em] font-black ${status.store_initialized ? 'text-[#2dd36f]' : 'text-error'}`}>
+              <span className={`text-[10px] uppercase tracking-[0.2em] font-black ${status.store_initialized ? 'text-green-400' : 'text-error'}`}>
                 {status.store_initialized ? 'ONLINE' : 'OFFLINE'}
               </span>
             </div>
@@ -152,10 +152,10 @@ export default function StatusPage() {
           </div>
           <div className="bg-surface-container-high/60 border border-outline-variant/15 p-5 sm:p-6 rounded-2xl sm:rounded-3xl backdrop-blur-xl">
             <div className="flex items-center justify-between">
-              <span className={`material-symbols-outlined text-3xl ${status.embeddings_loaded ? 'text-[#2dd36f]' : 'text-error'}`}>
+              <span className={`material-symbols-outlined text-3xl ${status.embeddings_loaded ? 'text-green-400' : 'text-error'}`}>
                 {status.embeddings_loaded ? 'neurology' : 'error'}
               </span>
-              <span className={`text-[10px] uppercase tracking-[0.2em] font-black ${status.embeddings_loaded ? 'text-[#2dd36f]' : 'text-error'}`}>
+              <span className={`text-[10px] uppercase tracking-[0.2em] font-black ${status.embeddings_loaded ? 'text-green-400' : 'text-error'}`}>
                 {status.embeddings_loaded ? 'READY' : 'DOWN'}
               </span>
             </div>
@@ -177,7 +177,7 @@ export default function StatusPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Object.entries(health.checks).map(([key, ok]) => (
               <div key={key} className="flex items-center gap-3 px-4 py-3 bg-surface-container-low/60 rounded-xl border border-outline-variant/10">
-                <span className={`material-symbols-outlined text-base ${ok ? 'text-[#2dd36f]' : 'text-error'}`}>
+                <span className={`material-symbols-outlined text-base ${ok ? 'text-green-400' : 'text-error'}`}>
                   {ok ? 'check_circle' : 'cancel'}
                 </span>
                 <span className="text-xs text-on-surface font-medium">

@@ -11,6 +11,15 @@ import StatusPage from './pages/StatusPage';
 import DashboardPage from './pages/Dashboard';
 import ProfilePage from './pages/ProfilePage';
 
+// New pages
+import AnalyticsPage from './pages/AnalyticsPage';
+import ModelsPage from './pages/ModelsPage';
+import SessionsPage from './pages/SessionsPage';
+import ActivityPage from './pages/ActivityPage';
+import NotificationsPage from './pages/NotificationsPage';
+import HelpPage from './pages/HelpPage';
+import AboutPage from './pages/AboutPage';
+
 // Auth Pages
 import HomePage from './pages/Home';
 import LoginPage from './features/auth/Login';
@@ -20,6 +29,7 @@ import ResetPasswordPage from './features/auth/ResetPassword';
 import AuthCallbackPage from './features/auth/AuthCallback';
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { useTheme } from './hooks/useTheme';
 
 // NOTE: This must never be asynchronous. If authEnabled is ever made async (e.g. fetched from /system/config),
 // this top-level const pattern will silently fallback to initial values and bypass ProtectedRoute.
@@ -43,6 +53,13 @@ function DashboardRoutes() {
         <Route path="status" element={<StatusPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="models" element={<ModelsPage />} />
+        <Route path="sessions" element={<SessionsPage />} />
+        <Route path="activity" element={<ActivityPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="help" element={<HelpPage />} />
+        <Route path="about" element={<AboutPage />} />
       </Route>
     </Routes>
   );
@@ -63,11 +80,18 @@ function ProtectedRoute() {
 }
 
 function App() {
+  // Initialize theme system at app root (reads localStorage + applies dark class)
+  useTheme();
+
   return (
     <ErrorBoundary>
       <AuthProvider>
         <Toaster position="top-center" toastOptions={{ 
-          style: { background: '#18181b', color: '#f4f4f5', border: '1px solid #27272a' }
+          style: {
+            background: 'rgb(var(--toast-bg))',
+            color: 'rgb(var(--toast-color))',
+            border: '1px solid rgb(var(--toast-border))'
+          }
         }} />
         <BrowserRouter>
           <Routes>
